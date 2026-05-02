@@ -133,7 +133,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead th {
     text-align: left; padding: 10px 12px; color: var(--muted); font-weight: 600;
-    border-bottom: 1px solid var(--border); position: sticky; top: 60px; background: var(--bg);
+    border-bottom: 1px solid var(--border); background: var(--bg-2);
   }
   tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
   tbody tr:hover { background: var(--bg-2); }
@@ -235,21 +235,57 @@
   </section>
 
   <section id="vault" hidden>
-    <h2>Backup.vault metadata</h2>
-    <div class="card">
+    <!-- Master-password gate (shown until vault is decrypted) -->
+    <div class="card" id="vault-gate">
+      <h2 style="margin-top:0">🔓 Unlock Backup.vault</h2>
       <p class="muted">
-        Public, non-sensitive metadata only. The encrypted payload stays in
-        Cloudflare KV; the master password never leaves your browser.
+        The encrypted envelope is fetched from the API; decryption happens
+        in this browser only. Your master password never leaves your machine.
       </p>
-      <dl class="kv" id="vault-kv"><dt>Status</dt><dd>Loading…</dd></dl>
+      <dl class="kv" id="vault-kv"><dt>Status</dt><dd>Loading envelope…</dd></dl>
+      <form id="vault-form" style="margin-top:14px;display:none">
+        <label for="mpw" style="display:block;color:var(--muted);font-size:12px;margin-bottom:6px">Master password</label>
+        <input id="mpw" type="password" autocomplete="off"
+               style="width:100%;padding:10px 12px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;font:inherit;outline:none" />
+        <button type="submit"
+                style="margin-top:10px;padding:9px 14px;background:var(--accent);color:#fff;border:0;border-radius:6px;font:inherit;font-weight:600;cursor:pointer">Unlock</button>
+        <div id="vault-err" class="err" style="margin-top:8px;min-height:18px"></div>
+      </form>
     </div>
-    <h2>Why this is safe</h2>
-    <div class="card">
-      <p>The vault is stored as a zero-knowledge AES-GCM envelope:</p>
-      <code>{ v, salt, iv, data }</code>
-      <p>The backend validates the envelope shape, but never decrypts. Decryption only happens in your browser when you type your master password.</p>
+
+    <!-- Decrypted contents (shown after successful unlock) -->
+    <div id="vault-app" hidden>
+      <div class="filters">
+        <input id="vq" type="search" placeholder="Search vault entries…" autocomplete="off" />
+        <button id="vault-relock"
+                style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">🔒 Re-lock</button>
+      </div>
+      <h2 id="vault-main-h">◈ Main Vault</h2>
+      <div id="vault-main" class="row" style="flex-direction:column"></div>
+      <h2 id="vault-sec-h" style="margin-top:24px;display:none">⟡ Hidden Grove</h2>
+      <div id="vault-secret" class="row" style="flex-direction:column;display:none"></div>
     </div>
   </section>
+
+  <style>
+    .cred {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+    }
+    .cred h3 { margin: 0 0 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .cred h3 img { width: 18px; height: 18px; border-radius: 3px; }
+    .cred .field { display: flex; gap: 12px; padding: 4px 0; font-size: 13px; align-items: baseline; }
+    .cred .field .l { color: var(--muted); min-width: 90px; flex: 0 0 90px; text-transform: uppercase; font-size: 11px; letter-spacing: .5px; }
+    .cred .field .v { word-break: break-all; }
+    .cred .field .v.pw { font-family: ui-monospace, monospace; }
+    .cred .field button {
+      margin-left: auto; background: transparent; color: var(--accent);
+      border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px;
+      font: inherit; font-size: 11px; cursor: pointer;
+    }
+    .cred .field button:hover { background: var(--bg); }
+    .cred .field button.copied { color: var(--good); border-color: var(--good); }
+  </style>
 </main>
 <footer>
   Backed by <code>secret-data-api.secureapp-time.workers.dev</code>.
@@ -384,22 +420,212 @@ async function loadDataset() {
   }
 }
 
+// ----- Vault: fetch + decrypt + render --------------------------------
+let vaultEnvelope = null;  // { v, salt, iv, data } — base64 strings
+let vaultDecrypted = null; // { main:[], secret:[], secretCode? }
+
 async function loadVault() {
-  if (vaultMeta) return renderVault();
   const dl = document.getElementById("vault-kv");
-  dl.innerHTML = "<dt>Status</dt><dd>Loading…</dd>";
+  const form = document.getElementById("vault-form");
+
+  // Always re-fetch metadata so it stays current; fetch envelope once.
   try {
-    const { data } = await fetchJson("/api/data/vault-meta");
-    vaultMeta = data;
-    renderVault();
+    if (!vaultMeta) {
+      const m = await fetchJson("/api/data/vault-meta");
+      vaultMeta = m.data;
+    }
+    if (!vaultEnvelope) {
+      const e = await fetchJson("/api/data/vault-envelope");
+      vaultEnvelope = e.data;
+    }
+    renderVaultMeta();
+    form.style.display = "block";
   } catch (e) {
     if (/HTTP 404/.test(e.message)) {
-      dl.innerHTML = "<dt>Status</dt><dd class='muted'>No vault uploaded yet.</dd>";
+      dl.innerHTML = "<dt>Status</dt><dd class='muted'>No vault uploaded yet. Run <code>bootstrap-upload.mjs vault</code>.</dd>";
     } else {
       dl.innerHTML = `<dt>Status</dt><dd class='err'>${esc(e.message)}</dd>`;
     }
+    form.style.display = "none";
   }
 }
+
+function renderVaultMeta() {
+  const m = vaultMeta;
+  const dl = document.getElementById("vault-kv");
+  dl.innerHTML = "";
+  const add = (k, v) => {
+    const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); dd.textContent = v;
+    dl.append(dt, dd);
+  };
+  add("Status", "Encrypted envelope ready — enter master password below");
+  add("Schema", `v${m.schemaVersion}`);
+  add("Salt size", `${m.saltBytes} bytes`);
+  add("IV size", `${m.ivBytes} bytes`);
+  add("Ciphertext size", `${m.ciphertextBytes.toLocaleString()} bytes`);
+  add("Ciphertext sha256", m.ciphertextSha256.slice(0, 32) + "…");
+  add("Accepted at", new Date(m.acceptedAt).toLocaleString());
+}
+
+// PBKDF2-SHA256 (250 000 iterations) → AES-GCM-256 key.  Mirrors the
+// Dark Forest Vault extension exactly so .vault files decrypt unchanged.
+const PBKDF2_ITER = 250000;
+
+function b64decode(s) {
+  const norm = s.replace(/-/g, "+").replace(/_/g, "/");
+  const pad  = norm.length % 4 === 0 ? norm : norm + "=".repeat(4 - (norm.length % 4));
+  const bin  = atob(pad);
+  const out  = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function deriveVaultKey(password, salt) {
+  const enc = new TextEncoder();
+  const raw = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: PBKDF2_ITER, hash: "SHA-256" },
+    raw,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+async function decryptVault(password) {
+  if (!vaultEnvelope) throw new Error("envelope_missing");
+  const { v, salt, iv, data } = vaultEnvelope;
+  if (v !== 1) throw new Error("Unknown vault version: " + v);
+  const key = await deriveVaultKey(password, b64decode(salt));
+  const pt  = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64decode(iv) }, key, b64decode(data));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+document.getElementById("vault-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pw  = document.getElementById("mpw").value;
+  const err = document.getElementById("vault-err");
+  err.textContent = "Decrypting…";
+  try {
+    vaultDecrypted = await decryptVault(pw);
+    if (!vaultDecrypted.main)   vaultDecrypted.main   = [];
+    if (!vaultDecrypted.secret) vaultDecrypted.secret = [];
+    document.getElementById("vault-gate").style.display = "none";
+    document.getElementById("vault-app").hidden = false;
+    document.getElementById("mpw").value = "";
+    err.textContent = "";
+    renderVaultEntries("");
+  } catch (ex) {
+    err.textContent = "Wrong password or corrupted file.";
+    document.getElementById("mpw").select();
+  }
+});
+
+document.getElementById("vault-relock").addEventListener("click", () => {
+  vaultDecrypted = null;
+  document.getElementById("vault-app").hidden = true;
+  document.getElementById("vault-gate").style.display = "";
+  document.getElementById("vq").value = "";
+});
+
+document.getElementById("vq").addEventListener("input", (e) => {
+  renderVaultEntries(e.target.value.trim().toLowerCase());
+});
+
+function favicon(url) {
+  if (!url) return "";
+  try {
+    let d = url; if (!d.startsWith("http")) d = "https://" + d;
+    return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(new URL(d).hostname) + "&sz=32";
+  } catch { return ""; }
+}
+
+function credCardHTML(c) {
+  const ico = c.icon || favicon(c.url);
+  const rows = [];
+  const addField = (label, value, isPw) => {
+    if (!value) return;
+    rows.push(`
+      <div class="field">
+        <span class="l">${esc(label)}</span>
+        <span class="v ${isPw ? 'pw' : ''}" data-pw-for="${esc(c.id || '')}-${esc(label)}">
+          ${isPw ? '••••••••' : esc(value)}
+        </span>
+        ${isPw
+          ? `<button data-act="reveal" data-target="${esc(c.id || '')}-${esc(label)}" data-val="${esc(value)}">Reveal</button>`
+          : ''}
+        <button data-act="copy" data-val="${esc(value)}">Copy</button>
+      </div>`);
+  };
+  addField("Email", c.email, false);
+  addField("Username", c.username, false);
+  addField("Password", c.password, true);
+  if (c.url) addField("URL", c.url, false);
+  (c.extra || []).forEach((f) => {
+    const isSecret = !!f.s || /key|pass|secret/i.test(f.l);
+    addField(f.l, f.v, isSecret);
+  });
+  return `
+    <div class="cred" data-name="${esc((c.name || '').toLowerCase())}">
+      <h3>${ico ? `<img src="${esc(ico)}" alt="" onerror="this.style.display='none'">` : ''}${esc(c.name || '(unnamed)')}</h3>
+      ${rows.join("")}
+    </div>`;
+}
+
+function renderVaultEntries(query) {
+  if (!vaultDecrypted) return;
+  const q = (query || "").toLowerCase();
+
+  // Easter-egg: typing the secret code in the search reveals the hidden grove.
+  const revealHidden = vaultDecrypted.secretCode && q === vaultDecrypted.secretCode.toLowerCase();
+  const showSecret = revealHidden || (vaultDecrypted.secret && vaultDecrypted.secret.length > 0 && q !== "");
+
+  const matches = (c) => !q || (c.name || "").toLowerCase().includes(q)
+                              || (c.email || "").toLowerCase().includes(q)
+                              || (c.username || "").toLowerCase().includes(q);
+
+  const main = vaultDecrypted.main.filter(matches);
+  document.getElementById("vault-main-h").textContent = `◈ Main Vault (${main.length})`;
+  document.getElementById("vault-main").innerHTML = main.length
+    ? main.map(credCardHTML).join("")
+    : `<div class="muted">No matches.</div>`;
+
+  if (showSecret || revealHidden) {
+    const sec = vaultDecrypted.secret.filter(matches);
+    document.getElementById("vault-sec-h").style.display = "block";
+    document.getElementById("vault-secret").style.display = "flex";
+    document.getElementById("vault-sec-h").textContent = `⟡ Hidden Grove (${sec.length})`;
+    document.getElementById("vault-secret").innerHTML = sec.length
+      ? sec.map(credCardHTML).join("")
+      : `<div class="muted">No matches.</div>`;
+  } else {
+    document.getElementById("vault-sec-h").style.display = "none";
+    document.getElementById("vault-secret").style.display = "none";
+  }
+}
+
+// Click handlers for Copy / Reveal buttons inside the credential cards.
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-act]"); if (!t) return;
+  const act = t.dataset.act;
+  if (act === "copy") {
+    navigator.clipboard.writeText(t.dataset.val || "").then(() => {
+      const old = t.textContent; t.textContent = "✓ Copied"; t.classList.add("copied");
+      setTimeout(() => { t.textContent = old; t.classList.remove("copied"); }, 1200);
+    });
+  } else if (act === "reveal") {
+    const span = document.querySelector(`[data-pw-for="${t.dataset.target}"]`);
+    if (!span) return;
+    if (span.textContent.includes("•")) {
+      span.textContent = t.dataset.val;
+      t.textContent = "Hide";
+    } else {
+      span.textContent = "••••••••";
+      t.textContent = "Reveal";
+    }
+  }
+});
 
 // ============================================================
 // Renderers
@@ -492,23 +718,7 @@ function renderExplorer() {
   document.getElementById("result-count").textContent = `${nfmt(total)} matches`;
 }
 
-function renderVault() {
-  const m = vaultMeta;
-  const dl = document.getElementById("vault-kv");
-  dl.innerHTML = "";
-  const add = (k, v) => {
-    const dt = document.createElement("dt"); dt.textContent = k;
-    const dd = document.createElement("dd"); dd.textContent = v;
-    dl.append(dt, dd);
-  };
-  add("Schema",            `v${m.schemaVersion}`);
-  add("Envelope version",  m.envelopeVersion);
-  add("Salt size",         `${m.saltBytes} bytes`);
-  add("IV size",           `${m.ivBytes} bytes`);
-  add("Ciphertext size",   `${m.ciphertextBytes.toLocaleString()} bytes`);
-  add("Ciphertext sha256", m.ciphertextSha256);
-  add("Accepted at",       new Date(m.acceptedAt).toLocaleString());
-}
+// (renderVaultMeta lives above — it replaces the old renderVault helper)
 
 // ============================================================
 // Wiring
