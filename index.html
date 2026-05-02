@@ -173,14 +173,16 @@
 <div id="login" class="show">
   <form class="box" id="login-form">
     <h1>🔒 Secret Data Explorer</h1>
-    <p>Enter the access password to continue.</p>
-    <label for="pw">Password</label>
-    <input id="pw" type="password" autocomplete="current-password" required autofocus />
+    <p>Both passwords are required.</p>
+    <label for="pw1">Password 1</label>
+    <input id="pw1" type="password" autocomplete="off" required autofocus />
+    <label for="pw2" style="margin-top:10px">Password 2</label>
+    <input id="pw2" type="password" autocomplete="off" required />
     <button type="submit">Unlock</button>
     <div class="err" id="login-err"></div>
     <div class="hint">
-      Password is stored only in this browser tab (sessionStorage). Closes the
-      tab → password forgotten. Wrong password → server returns 401.
+      Both fields must match. Combined credential is held only in this tab
+      (sessionStorage) and forgotten when the tab closes.
     </div>
   </form>
 </div>
@@ -324,14 +326,21 @@ const PASS_KEY = "secret-data-api/pw";
 const loginEl   = document.getElementById("login");
 const appEl     = document.getElementById("app");
 const formEl    = document.getElementById("login-form");
-const pwEl      = document.getElementById("pw");
+const pw1El     = document.getElementById("pw1");
+const pw2El     = document.getElementById("pw2");
 const errEl     = document.getElementById("login-err");
 const logoutEl  = document.getElementById("logout");
 
+// The "credential" the Worker actually compares is `pw1 || pw2`.
+// Both boxes must be filled and both must match what's in Cloudflare.
+function combine(a, b) { return a + "||" + b; }
+
 formEl.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const pw = pwEl.value.trim();
-  if (!pw) return;
+  const a = pw1El.value;
+  const b = pw2El.value;
+  if (!a || !b) { errEl.textContent = "Both passwords are required."; return; }
+  const pw = combine(a, b);
   errEl.textContent = "Checking…";
   // Probe with the password. /api/health doesn't require auth, but
   // /api/data/cmu-explorer does when READ_BEARER_TOKEN is set.
@@ -361,8 +370,9 @@ logoutEl.addEventListener("click", () => {
   sessionStorage.removeItem(PASS_KEY);
   appEl.classList.remove("show");
   loginEl.classList.add("show");
-  pwEl.value = "";
-  pwEl.focus();
+  pw1El.value = "";
+  pw2El.value = "";
+  pw1El.focus();
 });
 
 function enterApp() {
