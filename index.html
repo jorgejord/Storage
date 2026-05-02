@@ -271,6 +271,23 @@
                 style="margin-top:10px;padding:9px 14px;background:var(--accent);color:#fff;border:0;border-radius:6px;font:inherit;font-weight:600;cursor:pointer">Unlock</button>
         <div id="vault-err" class="err" style="margin-top:8px;min-height:18px"></div>
       </form>
+
+      <hr style="border:0;border-top:1px solid var(--border);margin:18px 0">
+      <details style="margin-top:6px">
+        <summary style="cursor:pointer;color:var(--muted);font-size:13px">⬆ Replace stored vault from a .vault file</summary>
+        <div style="margin-top:10px">
+          <p class="muted" style="font-size:12px;margin-top:0">
+            Pick a .vault file from your computer. The file is read in this browser,
+            its envelope shape is verified, then the ciphertext is uploaded.
+            Your master password is NOT sent — only the encrypted bytes.
+          </p>
+          <input id="vault-file" type="file" accept=".vault,application/json"
+                 style="font:inherit;color:var(--fg)" />
+          <button id="vault-upload-btn"
+                  style="margin-left:8px;padding:7px 12px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;cursor:pointer;font:inherit">Upload</button>
+          <div id="vault-upload-status" style="margin-top:8px;min-height:16px;font-size:12px"></div>
+        </div>
+      </details>
     </div>
 
     <!-- Decrypted contents (shown after successful unlock) -->
@@ -571,6 +588,56 @@ async function decryptVault(password) {
   const pt  = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64decode(iv) }, key, b64decode(data));
   return JSON.parse(new TextDecoder().decode(pt));
 }
+
+// ----- Upload a fresh vault from a local .vault file ----------------
+document.getElementById("vault-upload-btn").addEventListener("click", async () => {
+  const input  = document.getElementById("vault-file");
+  const status = document.getElementById("vault-upload-status");
+  const file   = input.files && input.files[0];
+  if (!file) { status.innerHTML = "<span class='err'>Pick a .vault file first.</span>"; return; }
+  if (file.size > 5 * 1024 * 1024) { status.innerHTML = "<span class='err'>File too large (5 MiB cap).</span>"; return; }
+
+  status.textContent = `Reading ${file.name}…`;
+  let text;
+  try { text = await file.text(); }
+  catch (e) { status.innerHTML = "<span class='err'>Couldn't read file: " + esc(e.message) + "</span>"; return; }
+
+  // Local sanity check before we even send. Cheap, prevents obvious mistakes.
+  try {
+    const env = JSON.parse(text);
+    if (!env || typeof env !== "object" || !env.salt || !env.iv || !env.data) {
+      throw new Error("Not a valid vault envelope (missing salt/iv/data).");
+    }
+  } catch (e) {
+    status.innerHTML = "<span class='err'>" + esc(e.message) + "</span>";
+    return;
+  }
+
+  status.textContent = "Uploading…";
+  try {
+    const pw = sessionStorage.getItem(PASS_KEY) || "";
+    const r = await fetch(`${API_BASE}/api/vault/upload`, {
+      method: "POST", mode: "cors", credentials: "omit",
+      headers: { "authorization": "Bearer " + pw, "content-type": "application/json" },
+      body: text,
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = (j && j.error && j.error.message) || ("HTTP " + r.status);
+      throw new Error(msg);
+    }
+    status.innerHTML = `<span style="color:var(--good)">✓ uploaded · ${j.ciphertextBytes} bytes · v${j.metadataVersion}</span>`;
+
+    // Reset cached vault state so the new envelope is fetched next.
+    vaultEnvelope = null; vaultMeta = null; vaultDecrypted = null;
+    document.getElementById("vault-app").hidden = true;
+    document.getElementById("vault-gate").style.display = "";
+    document.getElementById("mpw").value = "";
+    setTimeout(loadVault, 600);
+  } catch (e) {
+    status.innerHTML = "<span class='err'>Upload failed: " + esc(e.message) + "</span>";
+  }
+});
 
 document.getElementById("vault-form").addEventListener("submit", async (e) => {
   e.preventDefault();
