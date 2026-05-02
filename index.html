@@ -331,9 +331,11 @@ const pw2El     = document.getElementById("pw2");
 const errEl     = document.getElementById("login-err");
 const logoutEl  = document.getElementById("logout");
 
-// The "credential" the Worker actually compares is `pw1 || pw2`.
+// The "credential" the Worker actually compares is `pw1:::pw2`.
 // Both boxes must be filled and both must match what's in Cloudflare.
-function combine(a, b) { return a + "||" + b; }
+// (We use `:::` as the delimiter because Windows cmd interprets `||` as
+// a logical-OR operator and mangled it on the manage-passwords script.)
+function combine(a, b) { return a + ":::" + b; }
 
 formEl.addEventListener("submit", async (e) => {
   e.preventDefault();
