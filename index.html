@@ -193,9 +193,9 @@
     <button data-tab="overview" class="active">Overview</button>
     <button data-tab="explorer">Student Explorer</button>
     <button data-tab="vault">Vault</button>
-    <a href="Mylist.html"             class="navlink" title="Open Mylist">Mylist</a>
-    <a href="reg-cmu-combined.html"   class="navlink" title="Open REG CMU schedule">REG CMU</a>
-    <a href="CMU_Student_Explorer.html" class="navlink" title="Open offline CSV explorer">Offline CSV</a>
+    <button data-tab="apps" data-asset="Mylist.html">Mylist</button>
+    <button data-tab="apps" data-asset="reg-cmu-combined.html">REG CMU</button>
+    <button data-tab="apps" data-asset="CMU_Student_Explorer.html">Offline CSV</button>
   </nav>
   <button id="logout" title="Forget password">Log out</button>
 </header>
@@ -239,6 +239,16 @@
       <span id="page-info">—</span>
       <button id="next">Next ›</button>
       <span class="muted" id="result-count" style="margin-left:auto"></span>
+    </div>
+  </section>
+
+  <section id="apps" hidden>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="apps-toolbar" style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <span class="muted" id="apps-title">Loading…</span>
+        <a id="apps-popout" href="#" target="_blank" style="margin-left:auto;color:var(--accent);font-size:12px;text-decoration:none">↗ Open in new tab</a>
+      </div>
+      <iframe id="apps-frame" style="width:100%;height:calc(100vh - 160px);border:0;background:#fff" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-downloads"></iframe>
     </div>
   </section>
 
@@ -376,8 +386,48 @@ document.querySelectorAll("nav button").forEach((btn) => {
     const tab = btn.dataset.tab;
     document.querySelectorAll("main > section").forEach((s) => { s.hidden = s.id !== tab; });
     if (tab === "vault") loadVault();
+    if (tab === "apps")  loadAsset(btn.dataset.asset);
   });
 });
+
+// ----- Private asset loader -------------------------------------------
+let lastAssetBlobUrl = null;
+async function loadAsset(name) {
+  if (!name) return;
+  const titleEl = document.getElementById("apps-title");
+  const frame   = document.getElementById("apps-frame");
+  const popout  = document.getElementById("apps-popout");
+  titleEl.textContent = `Loading ${name}…`;
+  try {
+    const pw = sessionStorage.getItem(PASS_KEY) || "";
+    const r = await fetch(`${API_BASE}/api/asset/${encodeURIComponent(name)}`, {
+      mode: "cors", credentials: "omit",
+      headers: { "authorization": "Bearer " + pw },
+    });
+    if (r.status === 401) {
+      sessionStorage.removeItem(PASS_KEY);
+      appEl.classList.remove("show"); loginEl.classList.add("show");
+      return;
+    }
+    if (r.status === 404) { titleEl.innerHTML = `<span class="err">${esc(name)} not uploaded yet — run <code>protect-secrets.bat</code></span>`; return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+
+    let bytes = await r.arrayBuffer();
+    if ((r.headers.get("x-body-encoding") || "") === "gzip") {
+      const ds = new DecompressionStream("gzip");
+      const stream = new Blob([bytes]).stream().pipeThrough(ds);
+      bytes = await new Response(stream).arrayBuffer();
+    }
+    const ct = r.headers.get("content-type") || "text/html";
+    if (lastAssetBlobUrl) URL.revokeObjectURL(lastAssetBlobUrl);
+    lastAssetBlobUrl = URL.createObjectURL(new Blob([bytes], { type: ct }));
+    frame.src = lastAssetBlobUrl;
+    popout.href = lastAssetBlobUrl;
+    titleEl.textContent = name;
+  } catch (e) {
+    titleEl.innerHTML = `<span class="err">Load failed: ${esc(e.message)}</span>`;
+  }
+}
 
 // ============================================================
 // Data fetching with manual gzip decompression
