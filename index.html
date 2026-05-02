@@ -39,11 +39,62 @@
     font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     min-height: 100vh;
   }
+  /* ---- Login gate ---------------------------------------------------- */
+  #login {
+    display: none;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+  }
+  #login.show { display: flex; }
+  #login .box {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    width: 100%;
+    max-width: 380px;
+  }
+  #login h1 { font-size: 18px; margin: 0 0 4px; }
+  #login p { color: var(--muted); margin: 0 0 18px; }
+  #login label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  #login input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font: inherit;
+    outline: none;
+  }
+  #login input:focus { border-color: var(--accent); }
+  #login button {
+    margin-top: 14px;
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 6px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #login button:hover { filter: brightness(1.1); }
+  #login .err { color: var(--bad); margin-top: 10px; font-size: 13px; min-height: 18px; }
+  #login .hint { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.5; }
+
+  /* ---- App ----------------------------------------------------------- */
+  #app { display: none; }
+  #app.show { display: block; }
   header {
     border-bottom: 1px solid var(--border);
     padding: 14px 22px;
     display: flex; align-items: center; gap: 16px;
     position: sticky; top: 0; background: var(--bg); z-index: 5;
+    flex-wrap: wrap;
   }
   header h1 { font-size: 16px; margin: 0; font-weight: 600; }
   header h1 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
@@ -55,6 +106,11 @@
   }
   nav button:hover { color: var(--fg); background: var(--bg-2); }
   nav button.active { color: var(--fg); border-color: var(--border); background: var(--bg-2); }
+  #logout {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    padding: 6px 10px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px;
+  }
+  #logout:hover { color: var(--fg); }
   main { max-width: 1200px; margin: 0 auto; padding: 22px; }
   section[hidden] { display: none !important; }
   .row { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -67,11 +123,11 @@
   .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
   .stat .sub { color: var(--muted); font-size: 12px; }
   h2 { font-size: 14px; margin: 20px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-  input[type=search], input[type=text], select {
+  input[type=search], input[type=text], input[type=password], select {
     background: var(--bg-2); color: var(--fg); border: 1px solid var(--border);
     padding: 8px 12px; border-radius: 6px; font: inherit; outline: none;
   }
-  input[type=search]:focus, select:focus { border-color: var(--accent); }
+  input:focus, select:focus { border-color: var(--accent); }
   .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   .filters input[type=search] { flex: 1; min-width: 220px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -107,6 +163,25 @@
 </style>
 </head>
 <body>
+
+<!-- Password gate -->
+<div id="login" class="show">
+  <form class="box" id="login-form">
+    <h1>🔒 Secret Data Explorer</h1>
+    <p>Enter the access password to continue.</p>
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="current-password" required autofocus />
+    <button type="submit">Unlock</button>
+    <div class="err" id="login-err"></div>
+    <div class="hint">
+      Password is stored only in this browser tab (sessionStorage). Closes the
+      tab → password forgotten. Wrong password → server returns 401.
+    </div>
+  </form>
+</div>
+
+<!-- App (after login) -->
+<div id="app">
 <header>
   <h1>Secret Data Explorer<small id="version-tag"></small></h1>
   <nav>
@@ -114,6 +189,7 @@
     <button data-tab="explorer">Student Explorer</button>
     <button data-tab="vault">Vault</button>
   </nav>
+  <button id="logout" title="Forget password">Log out</button>
 </header>
 <main>
   <section id="overview">
@@ -179,16 +255,76 @@
   Backed by <code>secret-data-api.secureapp-time.workers.dev</code>.
   <span id="footer-status">Live.</span>
 </footer>
+</div>
 
 <script>
-// -------------------------------------------------------------
+// ============================================================
 // Configuration
-// -------------------------------------------------------------
+// ============================================================
 const API_BASE = "https://secret-data-api.secureapp-time.workers.dev";
+const PASS_KEY = "secret-data-api/pw";
 
-// -------------------------------------------------------------
+// ============================================================
+// Login gate
+// ============================================================
+const loginEl   = document.getElementById("login");
+const appEl     = document.getElementById("app");
+const formEl    = document.getElementById("login-form");
+const pwEl      = document.getElementById("pw");
+const errEl     = document.getElementById("login-err");
+const logoutEl  = document.getElementById("logout");
+
+formEl.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pw = pwEl.value.trim();
+  if (!pw) return;
+  errEl.textContent = "Checking…";
+  // Probe with the password. /api/health doesn't require auth, but
+  // /api/data/cmu-explorer does when READ_BEARER_TOKEN is set.
+  try {
+    const r = await fetch(`${API_BASE}/api/data/cmu-explorer`, {
+      mode: "cors",
+      headers: { "authorization": "Bearer " + pw, "accept": "application/json" },
+    });
+    if (r.status === 401) { errEl.textContent = "Wrong password."; return; }
+    if (r.status === 404) {
+      // Auth passed, dataset just isn't published yet — still "logged in".
+      sessionStorage.setItem(PASS_KEY, pw);
+      enterApp();
+      errEl.textContent = "";
+      return;
+    }
+    if (!r.ok) { errEl.textContent = "Server error: HTTP " + r.status; return; }
+    sessionStorage.setItem(PASS_KEY, pw);
+    enterApp();
+    errEl.textContent = "";
+  } catch (e) {
+    errEl.textContent = "Network error: " + e.message;
+  }
+});
+
+logoutEl.addEventListener("click", () => {
+  sessionStorage.removeItem(PASS_KEY);
+  appEl.classList.remove("show");
+  loginEl.classList.add("show");
+  pwEl.value = "";
+  pwEl.focus();
+});
+
+function enterApp() {
+  loginEl.classList.remove("show");
+  appEl.classList.add("show");
+  loadDataset();
+}
+
+// If a password is already in sessionStorage from this tab, skip the gate.
+if (sessionStorage.getItem(PASS_KEY)) {
+  enterApp();
+}
+
+// ============================================================
 // Tabs
-// -------------------------------------------------------------
+// ============================================================
 document.querySelectorAll("nav button").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
@@ -199,22 +335,44 @@ document.querySelectorAll("nav button").forEach((btn) => {
   });
 });
 
-// -------------------------------------------------------------
-// Data fetch (gzip auto-decoded by browser)
-// -------------------------------------------------------------
-let dataset = null;       // cmu-explorer payload
-let vaultMeta = null;     // vault-meta payload
+// ============================================================
+// Data fetching with manual gzip decompression
+// ============================================================
+async function fetchJson(path) {
+  const pw = sessionStorage.getItem(PASS_KEY);
+  const headers = { "accept": "application/json" };
+  if (pw) headers["authorization"] = "Bearer " + pw;
+  const r = await fetch(API_BASE + path, { mode: "cors", credentials: "omit", headers });
+  if (r.status === 401) {
+    sessionStorage.removeItem(PASS_KEY);
+    appEl.classList.remove("show");
+    loginEl.classList.add("show");
+    throw new Error("Session expired — please log in again.");
+  }
+  if (!r.ok) throw new Error("HTTP " + r.status);
+
+  const enc = r.headers.get("x-body-encoding");
+  if (enc === "gzip") {
+    const buf = await r.arrayBuffer();
+    const ds = new DecompressionStream("gzip");
+    const stream = new Blob([buf]).stream().pipeThrough(ds);
+    const text = await new Response(stream).text();
+    return { data: JSON.parse(text), version: r.headers.get("x-dataset-version") };
+  }
+  return { data: await r.json(), version: r.headers.get("x-dataset-version") };
+}
+
+let dataset = null;
+let vaultMeta = null;
 
 async function loadDataset() {
   const status = document.getElementById("stat-status");
   status.textContent = "Loading dataset…";
   try {
-    const r = await fetch(`${API_BASE}/api/data/cmu-explorer`, { mode: "cors" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    dataset = await r.json();
-    const v = r.headers.get("x-dataset-version");
-    document.getElementById("version-tag").textContent = v ? ` · v${v}` : "";
-    document.getElementById("stat-version").textContent = v ? `dataset v${v}` : "";
+    const { data, version } = await fetchJson("/api/data/cmu-explorer");
+    dataset = data;
+    document.getElementById("version-tag").textContent = version ? ` · v${version}` : "";
+    document.getElementById("stat-version").textContent = version ? `dataset v${version}` : "";
     renderOverview();
     populateFilters();
     renderExplorer();
@@ -231,22 +389,21 @@ async function loadVault() {
   const dl = document.getElementById("vault-kv");
   dl.innerHTML = "<dt>Status</dt><dd>Loading…</dd>";
   try {
-    const r = await fetch(`${API_BASE}/api/data/vault-meta`, { mode: "cors" });
-    if (r.status === 404) {
-      dl.innerHTML = "<dt>Status</dt><dd class='muted'>No vault uploaded yet.</dd>";
-      return;
-    }
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    vaultMeta = await r.json();
+    const { data } = await fetchJson("/api/data/vault-meta");
+    vaultMeta = data;
     renderVault();
   } catch (e) {
-    dl.innerHTML = `<dt>Status</dt><dd class='err'>${esc(e.message)}</dd>`;
+    if (/HTTP 404/.test(e.message)) {
+      dl.innerHTML = "<dt>Status</dt><dd class='muted'>No vault uploaded yet.</dd>";
+    } else {
+      dl.innerHTML = `<dt>Status</dt><dd class='err'>${esc(e.message)}</dd>`;
+    }
   }
 }
 
-// -------------------------------------------------------------
+// ============================================================
 // Renderers
-// -------------------------------------------------------------
+// ============================================================
 function renderOverview() {
   document.getElementById("stat-rows").textContent = nfmt(dataset.rowCount);
   document.getElementById("stat-fac").textContent  = nfmt(dataset.facultyCount);
@@ -254,15 +411,13 @@ function renderOverview() {
   document.getElementById("stat-gen").textContent =
     d.toLocaleDateString() + " " + d.toLocaleTimeString();
 
-  const facBody = document.getElementById("fac-tbody");
-  facBody.innerHTML = dataset.facets.faculties.map((f) =>
+  document.getElementById("fac-tbody").innerHTML = dataset.facets.faculties.map((f) =>
     `<tr><td>${esc(f.en)} <span class="pill">${esc(f.code)}</span></td>
          <td class="muted">${esc(f.th)}</td>
          <td style="text-align:right"><strong>${nfmt(f.count)}</strong></td></tr>`
   ).join("");
 
-  const lvlBody = document.getElementById("lvl-tbody");
-  lvlBody.innerHTML = dataset.facets.levels.map((l) =>
+  document.getElementById("lvl-tbody").innerHTML = dataset.facets.levels.map((l) =>
     `<tr><td>${esc(l.en)} <span class="pill">${esc(l.code)}</span></td>
          <td class="muted">${esc(l.th)}</td>
          <td style="text-align:right"><strong>${nfmt(l.count)}</strong></td></tr>`
@@ -271,12 +426,14 @@ function renderOverview() {
 
 function populateFilters() {
   const fac = document.getElementById("fac-filter");
+  fac.length = 1;
   for (const f of dataset.facets.faculties) {
     const o = document.createElement("option");
     o.value = f.code; o.textContent = `${f.en} (${f.count})`;
     fac.appendChild(o);
   }
   const lvl = document.getElementById("lvl-filter");
+  lvl.length = 1;
   for (const l of dataset.facets.levels) {
     const o = document.createElement("option");
     o.value = l.code; o.textContent = `${l.en} (${l.count})`;
@@ -289,7 +446,8 @@ let page = 1;
 let filtered = [];
 
 function applyFilters() {
-  const q = document.getElementById("q").value.trim().toLowerCase();
+  const qRaw = document.getElementById("q").value.trim();
+  const q = qRaw.toLowerCase();
   const f = document.getElementById("fac-filter").value;
   const l = document.getElementById("lvl-filter").value;
   filtered = dataset.rows.filter((r) => {
@@ -298,7 +456,7 @@ function applyFilters() {
     if (!q) return true;
     return r.Student_ID.toLowerCase().includes(q)
       || r.Name_EN.toLowerCase().includes(q)
-      || r.Name_TH.includes(document.getElementById("q").value.trim());
+      || r.Name_TH.includes(qRaw);
   });
   page = 1;
   renderExplorer();
@@ -306,11 +464,9 @@ function applyFilters() {
 
 function renderExplorer() {
   if (!dataset) return;
-  if (filtered === dataset.rows && document.getElementById("q").value === "") {
-    filtered = dataset.rows;
-  } else if (!filtered.length && !document.getElementById("q").value
-             && !document.getElementById("fac-filter").value
-             && !document.getElementById("lvl-filter").value) {
+  if (!filtered.length && !document.getElementById("q").value
+      && !document.getElementById("fac-filter").value
+      && !document.getElementById("lvl-filter").value) {
     filtered = dataset.rows;
   }
   const total = filtered.length;
@@ -319,19 +475,17 @@ function renderExplorer() {
   const start = (page - 1) * PAGE_SIZE;
   const slice = filtered.slice(start, start + PAGE_SIZE);
   const tbody = document.getElementById("exp-tbody");
-  if (!slice.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="muted">No matches.</td></tr>`;
-  } else {
-    tbody.innerHTML = slice.map((r) =>
-      `<tr><td><code>${esc(r.Student_ID)}</code></td>
-           <td>${esc(r.Name_EN)}</td>
-           <td>${esc(r.Name_TH)}</td>
-           <td>${esc(r.Faculty_EN)}</td>
-           <td>${esc(r.Major_EN)}</td>
-           <td>${esc(r.Level_EN)}</td>
-           <td>${esc(r.Year_Admission)}</td></tr>`
-    ).join("");
-  }
+  tbody.innerHTML = !slice.length
+    ? `<tr><td colspan="7" class="muted">No matches.</td></tr>`
+    : slice.map((r) =>
+        `<tr><td><code>${esc(r.Student_ID)}</code></td>
+             <td>${esc(r.Name_EN)}</td>
+             <td>${esc(r.Name_TH)}</td>
+             <td>${esc(r.Faculty_EN)}</td>
+             <td>${esc(r.Major_EN)}</td>
+             <td>${esc(r.Level_EN)}</td>
+             <td>${esc(r.Year_Admission)}</td></tr>`
+      ).join("");
   document.getElementById("page-info").textContent = `Page ${page} / ${pages}`;
   document.getElementById("prev").disabled = page <= 1;
   document.getElementById("next").disabled = page >= pages;
@@ -356,27 +510,24 @@ function renderVault() {
   add("Accepted at",       new Date(m.acceptedAt).toLocaleString());
 }
 
-// -------------------------------------------------------------
+// ============================================================
 // Wiring
-// -------------------------------------------------------------
+// ============================================================
 document.getElementById("q").addEventListener("input", applyFilters);
 document.getElementById("fac-filter").addEventListener("change", applyFilters);
 document.getElementById("lvl-filter").addEventListener("change", applyFilters);
 document.getElementById("prev").addEventListener("click", () => { page--; renderExplorer(); window.scrollTo(0, 0); });
 document.getElementById("next").addEventListener("click", () => { page++; renderExplorer(); window.scrollTo(0, 0); });
 
-// -------------------------------------------------------------
+// ============================================================
 // Helpers
-// -------------------------------------------------------------
+// ============================================================
 function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function nfmt(n) { return Number(n || 0).toLocaleString(); }
-
-// Kick off
-loadDataset();
 </script>
 </body>
 </html>
