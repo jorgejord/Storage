@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Secret Data Explorer</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --bg-2: #131822;
+    --fg: #e6edf3;
+    --muted: #8a93a3;
+    --accent: #6ea8fe;
+    --accent-2: #a3e1ff;
+    --border: #232a36;
+    --good: #74e695;
+    --warn: #ffc56e;
+    --bad: #ff7b7b;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #ffffff;
+      --bg-2: #f6f8fa;
+      --fg: #1e2330;
+      --muted: #5b6473;
+      --accent: #0969da;
+      --accent-2: #0a3069;
+      --border: #d0d7de;
+      --good: #1f883d;
+      --warn: #9a6700;
+      --bad: #cf222e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 22px;
+    display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; background: var(--bg); z-index: 5;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header h1 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  nav button {
+    background: transparent; color: var(--muted);
+    border: 1px solid transparent; padding: 6px 12px;
+    border-radius: 6px; cursor: pointer; font: inherit;
+  }
+  nav button:hover { color: var(--fg); background: var(--bg-2); }
+  nav button.active { color: var(--fg); border-color: var(--border); background: var(--bg-2); }
+  main { max-width: 1200px; margin: 0 auto; padding: 22px; }
+  section[hidden] { display: none !important; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .card {
+    background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .stat { flex: 1 1 180px; min-width: 180px; }
+  .stat .num { font-size: 28px; font-weight: 700; line-height: 1; margin: 4px 0 6px; }
+  .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .stat .sub { color: var(--muted); font-size: 12px; }
+  h2 { font-size: 14px; margin: 20px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  input[type=search], input[type=text], select {
+    background: var(--bg-2); color: var(--fg); border: 1px solid var(--border);
+    padding: 8px 12px; border-radius: 6px; font: inherit; outline: none;
+  }
+  input[type=search]:focus, select:focus { border-color: var(--accent); }
+  .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filters input[type=search] { flex: 1; min-width: 220px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; padding: 10px 12px; color: var(--muted); font-weight: 600;
+    border-bottom: 1px solid var(--border); position: sticky; top: 60px; background: var(--bg);
+  }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: var(--bg-2); }
+  .pill {
+    display: inline-block; padding: 1px 8px; border-radius: 999px;
+    font-size: 11px; background: var(--bg-2); border: 1px solid var(--border); color: var(--muted);
+  }
+  .pager { display: flex; gap: 8px; align-items: center; padding: 12px 0; color: var(--muted); }
+  .pager button {
+    background: var(--bg-2); color: var(--fg); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; font: inherit;
+  }
+  .pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .err { color: var(--bad); }
+  .muted { color: var(--muted); }
+  code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; font-size: 13px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; word-break: break-all; }
+  .loading {
+    display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite; vertical-align: -2px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  footer { color: var(--muted); padding: 30px 22px; text-align: center; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Secret Data Explorer<small id="version-tag"></small></h1>
+  <nav>
+    <button data-tab="overview" class="active">Overview</button>
+    <button data-tab="explorer">Student Explorer</button>
+    <button data-tab="vault">Vault</button>
+  </nav>
+</header>
+<main>
+  <section id="overview">
+    <div class="row" id="stat-row">
+      <div class="card stat"><div class="label">Status</div><div class="num"><span class="loading"></span></div><div class="sub" id="stat-status">Connecting…</div></div>
+      <div class="card stat"><div class="label">Students</div><div class="num" id="stat-rows">—</div><div class="sub">in current dataset</div></div>
+      <div class="card stat"><div class="label">Faculties</div><div class="num" id="stat-fac">—</div><div class="sub">covered</div></div>
+      <div class="card stat"><div class="label">Generated</div><div class="num" id="stat-gen" style="font-size:14px;font-weight:500">—</div><div class="sub" id="stat-version"></div></div>
+    </div>
+    <h2>Faculty breakdown</h2>
+    <div class="card">
+      <table><thead><tr><th>Faculty</th><th>Thai</th><th style="text-align:right">Students</th></tr></thead>
+      <tbody id="fac-tbody"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody></table>
+    </div>
+    <h2>Level breakdown</h2>
+    <div class="card">
+      <table><thead><tr><th>Level</th><th>Thai</th><th style="text-align:right">Students</th></tr></thead>
+      <tbody id="lvl-tbody"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <section id="explorer" hidden>
+    <div class="filters">
+      <input id="q" type="search" placeholder="Search by Student ID or Name (EN/TH)…" autocomplete="off" />
+      <select id="fac-filter"><option value="">All faculties</option></select>
+      <select id="lvl-filter"><option value="">All levels</option></select>
+    </div>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Student ID</th><th>Name (EN)</th><th>Name (TH)</th>
+          <th>Faculty</th><th>Major</th><th>Level</th><th>Year</th>
+        </tr></thead>
+        <tbody id="exp-tbody"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button id="prev">‹ Prev</button>
+      <span id="page-info">—</span>
+      <button id="next">Next ›</button>
+      <span class="muted" id="result-count" style="margin-left:auto"></span>
+    </div>
+  </section>
+
+  <section id="vault" hidden>
+    <h2>Backup.vault metadata</h2>
+    <div class="card">
+      <p class="muted">
+        Public, non-sensitive metadata only. The encrypted payload stays in
+        Cloudflare KV; the master password never leaves your browser.
+      </p>
+      <dl class="kv" id="vault-kv"><dt>Status</dt><dd>Loading…</dd></dl>
+    </div>
+    <h2>Why this is safe</h2>
+    <div class="card">
+      <p>The vault is stored as a zero-knowledge AES-GCM envelope:</p>
+      <code>{ v, salt, iv, data }</code>
+      <p>The backend validates the envelope shape, but never decrypts. Decryption only happens in your browser when you type your master password.</p>
+    </div>
+  </section>
+</main>
+<footer>
+  Backed by <code>secret-data-api.secureapp-time.workers.dev</code>.
+  <span id="footer-status">Live.</span>
+</footer>
+
+<script>
+// -------------------------------------------------------------
+// Configuration
+// -------------------------------------------------------------
+const API_BASE = "https://secret-data-api.secureapp-time.workers.dev";
+
+// -------------------------------------------------------------
+// Tabs
+// -------------------------------------------------------------
+document.querySelectorAll("nav button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    document.querySelectorAll("main > section").forEach((s) => { s.hidden = s.id !== tab; });
+    if (tab === "vault") loadVault();
+  });
+});
+
+// -------------------------------------------------------------
+// Data fetch (gzip auto-decoded by browser)
+// -------------------------------------------------------------
+let dataset = null;       // cmu-explorer payload
+let vaultMeta = null;     // vault-meta payload
+
+async function loadDataset() {
+  const status = document.getElementById("stat-status");
+  status.textContent = "Loading dataset…";
+  try {
+    const r = await fetch(`${API_BASE}/api/data/cmu-explorer`, { mode: "cors" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    dataset = await r.json();
+    const v = r.headers.get("x-dataset-version");
+    document.getElementById("version-tag").textContent = v ? ` · v${v}` : "";
+    document.getElementById("stat-version").textContent = v ? `dataset v${v}` : "";
+    renderOverview();
+    populateFilters();
+    renderExplorer();
+    document.querySelector("#stat-row .stat .num").textContent = "Live";
+    document.getElementById("stat-status").textContent = "Connected";
+  } catch (e) {
+    status.innerHTML = `<span class="err">Failed: ${esc(e.message)}</span>`;
+    document.getElementById("footer-status").innerHTML = `<span class="err">Disconnected (${esc(e.message)})</span>`;
+  }
+}
+
+async function loadVault() {
+  if (vaultMeta) return renderVault();
+  const dl = document.getElementById("vault-kv");
+  dl.innerHTML = "<dt>Status</dt><dd>Loading…</dd>";
+  try {
+    const r = await fetch(`${API_BASE}/api/data/vault-meta`, { mode: "cors" });
+    if (r.status === 404) {
+      dl.innerHTML = "<dt>Status</dt><dd class='muted'>No vault uploaded yet.</dd>";
+      return;
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    vaultMeta = await r.json();
+    renderVault();
+  } catch (e) {
+    dl.innerHTML = `<dt>Status</dt><dd class='err'>${esc(e.message)}</dd>`;
+  }
+}
+
+// -------------------------------------------------------------
+// Renderers
+// -------------------------------------------------------------
+function renderOverview() {
+  document.getElementById("stat-rows").textContent = nfmt(dataset.rowCount);
+  document.getElementById("stat-fac").textContent  = nfmt(dataset.facultyCount);
+  const d = new Date(dataset.generatedAt);
+  document.getElementById("stat-gen").textContent =
+    d.toLocaleDateString() + " " + d.toLocaleTimeString();
+
+  const facBody = document.getElementById("fac-tbody");
+  facBody.innerHTML = dataset.facets.faculties.map((f) =>
+    `<tr><td>${esc(f.en)} <span class="pill">${esc(f.code)}</span></td>
+         <td class="muted">${esc(f.th)}</td>
+         <td style="text-align:right"><strong>${nfmt(f.count)}</strong></td></tr>`
+  ).join("");
+
+  const lvlBody = document.getElementById("lvl-tbody");
+  lvlBody.innerHTML = dataset.facets.levels.map((l) =>
+    `<tr><td>${esc(l.en)} <span class="pill">${esc(l.code)}</span></td>
+         <td class="muted">${esc(l.th)}</td>
+         <td style="text-align:right"><strong>${nfmt(l.count)}</strong></td></tr>`
+  ).join("");
+}
+
+function populateFilters() {
+  const fac = document.getElementById("fac-filter");
+  for (const f of dataset.facets.faculties) {
+    const o = document.createElement("option");
+    o.value = f.code; o.textContent = `${f.en} (${f.count})`;
+    fac.appendChild(o);
+  }
+  const lvl = document.getElementById("lvl-filter");
+  for (const l of dataset.facets.levels) {
+    const o = document.createElement("option");
+    o.value = l.code; o.textContent = `${l.en} (${l.count})`;
+    lvl.appendChild(o);
+  }
+}
+
+const PAGE_SIZE = 50;
+let page = 1;
+let filtered = [];
+
+function applyFilters() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const f = document.getElementById("fac-filter").value;
+  const l = document.getElementById("lvl-filter").value;
+  filtered = dataset.rows.filter((r) => {
+    if (f && r.Faculty_Code !== f) return false;
+    if (l && r.Level_Code !== l) return false;
+    if (!q) return true;
+    return r.Student_ID.toLowerCase().includes(q)
+      || r.Name_EN.toLowerCase().includes(q)
+      || r.Name_TH.includes(document.getElementById("q").value.trim());
+  });
+  page = 1;
+  renderExplorer();
+}
+
+function renderExplorer() {
+  if (!dataset) return;
+  if (filtered === dataset.rows && document.getElementById("q").value === "") {
+    filtered = dataset.rows;
+  } else if (!filtered.length && !document.getElementById("q").value
+             && !document.getElementById("fac-filter").value
+             && !document.getElementById("lvl-filter").value) {
+    filtered = dataset.rows;
+  }
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (page > pages) page = pages;
+  const start = (page - 1) * PAGE_SIZE;
+  const slice = filtered.slice(start, start + PAGE_SIZE);
+  const tbody = document.getElementById("exp-tbody");
+  if (!slice.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="muted">No matches.</td></tr>`;
+  } else {
+    tbody.innerHTML = slice.map((r) =>
+      `<tr><td><code>${esc(r.Student_ID)}</code></td>
+           <td>${esc(r.Name_EN)}</td>
+           <td>${esc(r.Name_TH)}</td>
+           <td>${esc(r.Faculty_EN)}</td>
+           <td>${esc(r.Major_EN)}</td>
+           <td>${esc(r.Level_EN)}</td>
+           <td>${esc(r.Year_Admission)}</td></tr>`
+    ).join("");
+  }
+  document.getElementById("page-info").textContent = `Page ${page} / ${pages}`;
+  document.getElementById("prev").disabled = page <= 1;
+  document.getElementById("next").disabled = page >= pages;
+  document.getElementById("result-count").textContent = `${nfmt(total)} matches`;
+}
+
+function renderVault() {
+  const m = vaultMeta;
+  const dl = document.getElementById("vault-kv");
+  dl.innerHTML = "";
+  const add = (k, v) => {
+    const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); dd.textContent = v;
+    dl.append(dt, dd);
+  };
+  add("Schema",            `v${m.schemaVersion}`);
+  add("Envelope version",  m.envelopeVersion);
+  add("Salt size",         `${m.saltBytes} bytes`);
+  add("IV size",           `${m.ivBytes} bytes`);
+  add("Ciphertext size",   `${m.ciphertextBytes.toLocaleString()} bytes`);
+  add("Ciphertext sha256", m.ciphertextSha256);
+  add("Accepted at",       new Date(m.acceptedAt).toLocaleString());
+}
+
+// -------------------------------------------------------------
+// Wiring
+// -------------------------------------------------------------
+document.getElementById("q").addEventListener("input", applyFilters);
+document.getElementById("fac-filter").addEventListener("change", applyFilters);
+document.getElementById("lvl-filter").addEventListener("change", applyFilters);
+document.getElementById("prev").addEventListener("click", () => { page--; renderExplorer(); window.scrollTo(0, 0); });
+document.getElementById("next").addEventListener("click", () => { page++; renderExplorer(); window.scrollTo(0, 0); });
+
+// -------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function nfmt(n) { return Number(n || 0).toLocaleString(); }
+
+// Kick off
+loadDataset();
+</script>
+</body>
+</html>
