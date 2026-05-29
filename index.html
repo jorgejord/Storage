@@ -273,29 +273,63 @@
       </form>
 
       <hr style="border:0;border-top:1px solid var(--border);margin:18px 0">
-      <details style="margin-top:6px">
-        <summary style="cursor:pointer;color:var(--muted);font-size:13px">⬆ Replace stored vault from a .vault file</summary>
-        <div style="margin-top:10px">
-          <p class="muted" style="font-size:12px;margin-top:0">
-            Pick a .vault file from your computer. The file is read in this browser,
-            its envelope shape is verified, then the ciphertext is uploaded.
-            Your master password is NOT sent — only the encrypted bytes.
-          </p>
-          <input id="vault-file" type="file" accept=".vault,application/json"
-                 style="font:inherit;color:var(--fg)" />
-          <button id="vault-upload-btn"
-                  style="margin-left:8px;padding:7px 12px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;cursor:pointer;font:inherit">Upload</button>
-          <div id="vault-upload-status" style="margin-top:8px;min-height:16px;font-size:12px"></div>
-        </div>
-      </details>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px">
+        <div style="font-weight:600;font-size:14px;margin-bottom:4px">📥 Import .vault ใหม่</div>
+        <p class="muted" style="font-size:12px;margin:0 0 10px">
+          เลือกไฟล์ <code>.vault</code> จากเครื่องของคุณ — browser ตรวจสอบ envelope แล้วอัปโหลด ciphertext ขึ้น Cloudflare KV
+          แทนที่ของเดิม (ไม่ต้อง deploy ใหม่). Master password ไม่ถูกส่งขึ้น server.
+        </p>
+        <input id="vault-file" type="file" accept=".vault,application/json"
+               style="font:inherit;color:var(--fg)" />
+        <button id="vault-upload-btn"
+                style="margin-left:8px;padding:7px 12px;background:var(--accent);color:#fff;border:0;border-radius:6px;cursor:pointer;font:inherit;font-weight:600">⬆ Import &amp; แทนที่</button>
+        <div id="vault-upload-status" style="margin-top:8px;min-height:16px;font-size:12px"></div>
+      </div>
     </div>
 
     <!-- Decrypted contents (shown after successful unlock) -->
     <div id="vault-app" hidden>
       <div class="filters">
         <input id="vq" type="search" placeholder="Search vault entries…" autocomplete="off" />
+        <button id="vault-add-btn"
+                style="background:var(--good);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600">+ เพิ่มรหัส</button>
+        <button id="vault-save-btn" disabled
+                style="background:var(--accent);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600;opacity:.5">
+          💾 บันทึก Vault
+        </button>
+        <span id="vault-save-status" style="font-size:12px;color:var(--muted);align-self:center"></span>
+        <label for="vault-file-2" id="vault-import-label"
+               style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">📥 Import .vault</label>
+        <input id="vault-file-2" type="file" accept=".vault,application/json" style="display:none" />
         <button id="vault-relock"
                 style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">🔒 Re-lock</button>
+      </div>
+
+      <!-- Add-credential form (hidden until + เพิ่มรหัส clicked) -->
+      <div id="vault-add-form" class="card" style="display:none;margin-bottom:14px">
+        <h3 style="margin:0 0 10px;font-size:14px">เพิ่มรหัสใหม่</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">ชื่อ App *</label>
+               <input id="vc-name" type="text" style="width:100%"></div>
+          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">URL</label>
+               <input id="vc-url" type="text" style="width:100%"></div>
+          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">Email</label>
+               <input id="vc-email" type="text" style="width:100%"></div>
+          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">Username</label>
+               <input id="vc-user" type="text" style="width:100%"></div>
+          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">Password</label>
+               <input id="vc-pw" type="text" style="width:100%;font-family:ui-monospace,monospace"></div>
+          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">เก็บใน</label>
+               <select id="vc-loc" style="width:100%">
+                 <option value="main">◈ Main Vault</option>
+                 <option value="secret">⟡ Hidden Grove</option>
+               </select></div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button id="vc-save"   style="background:var(--accent);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600">เพิ่ม</button>
+          <button id="vc-cancel" style="background:transparent;color:var(--muted);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">ยกเลิก</button>
+          <div id="vc-err" class="err" style="align-self:center;font-size:12px"></div>
+        </div>
       </div>
       <h2 id="vault-main-h">◈ Main Vault</h2>
       <div id="vault-main" class="row" style="flex-direction:column"></div>
@@ -508,8 +542,10 @@ async function loadDataset() {
 }
 
 // ----- Vault: fetch + decrypt + render --------------------------------
-let vaultEnvelope = null;  // { v, salt, iv, data } — base64 strings
-let vaultDecrypted = null; // { main:[], secret:[], secretCode? }
+let vaultEnvelope = null;       // { v, salt, iv, data } — base64 strings
+let vaultDecrypted = null;      // { main:[], secret:[], secretCode? }
+let vaultMasterPassword = null; // held in memory between unlock and re-lock; cleared on re-lock
+let vaultDirty = false;         // unsaved-changes flag
 
 async function loadVault() {
   const dl = document.getElementById("vault-kv");
@@ -648,6 +684,8 @@ document.getElementById("vault-form").addEventListener("submit", async (e) => {
     vaultDecrypted = await decryptVault(pw);
     if (!vaultDecrypted.main)   vaultDecrypted.main   = [];
     if (!vaultDecrypted.secret) vaultDecrypted.secret = [];
+    vaultMasterPassword = pw;       // keep so we can re-encrypt on save
+    setDirty(false);
     document.getElementById("vault-gate").style.display = "none";
     document.getElementById("vault-app").hidden = false;
     document.getElementById("mpw").value = "";
@@ -660,11 +698,144 @@ document.getElementById("vault-form").addEventListener("submit", async (e) => {
 });
 
 document.getElementById("vault-relock").addEventListener("click", () => {
+  if (vaultDirty && !confirm("มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก ออกแน่นะ?")) return;
   vaultDecrypted = null;
+  vaultMasterPassword = null;
+  setDirty(false);
   document.getElementById("vault-app").hidden = true;
   document.getElementById("vault-gate").style.display = "";
   document.getElementById("vq").value = "";
+  document.getElementById("vault-add-form").style.display = "none";
 });
+
+// ---------- Edit helpers ------------------------------------------------
+function setDirty(v) {
+  vaultDirty = v;
+  const btn = document.getElementById("vault-save-btn");
+  const st  = document.getElementById("vault-save-status");
+  btn.disabled = !v;
+  btn.style.opacity = v ? "1" : ".5";
+  st.textContent = v ? "● ยังไม่ได้บันทึก" : "";
+  st.style.color = v ? "var(--warn)" : "var(--muted)";
+}
+
+function genId() {
+  return "c" + Date.now() + Math.random().toString(36).slice(2, 6);
+}
+
+async function encryptVaultEnvelope(obj, password) {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveVaultKey(password, salt);
+  const ct   = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(JSON.stringify(obj)));
+  const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  return JSON.stringify({ v: 1, salt: b64(salt.buffer), iv: b64(iv.buffer), data: b64(ct) });
+}
+
+// Open / cancel the add form
+document.getElementById("vault-add-btn").addEventListener("click", () => {
+  ["vc-name","vc-url","vc-email","vc-user","vc-pw"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("vc-loc").value = "main";
+  document.getElementById("vc-err").textContent = "";
+  document.getElementById("vault-add-form").style.display = "block";
+  document.getElementById("vc-name").focus();
+});
+document.getElementById("vc-cancel").addEventListener("click", () => {
+  document.getElementById("vault-add-form").style.display = "none";
+});
+
+// Add the new credential
+document.getElementById("vc-save").addEventListener("click", () => {
+  const name = document.getElementById("vc-name").value.trim();
+  const err  = document.getElementById("vc-err");
+  if (!name) { err.textContent = "ต้องใส่ชื่อ App"; return; }
+  const entry = {
+    id:       genId(),
+    name,
+    url:      document.getElementById("vc-url").value.trim(),
+    icon:     "",
+    email:    document.getElementById("vc-email").value.trim(),
+    username: document.getElementById("vc-user").value.trim(),
+    password: document.getElementById("vc-pw").value,
+    extra:    [],
+  };
+  const loc = document.getElementById("vc-loc").value;
+  (loc === "secret" ? vaultDecrypted.secret : vaultDecrypted.main).push(entry);
+  setDirty(true);
+  document.getElementById("vault-add-form").style.display = "none";
+  renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
+});
+
+// Save (encrypt → upload to /api/vault/upload)
+document.getElementById("vault-save-btn").addEventListener("click", async () => {
+  if (!vaultDecrypted || !vaultMasterPassword) return;
+  const st = document.getElementById("vault-save-status");
+  const btn = document.getElementById("vault-save-btn");
+  btn.disabled = true;
+  st.style.color = "var(--muted)";
+  st.textContent = "กำลังเข้ารหัสและอัปโหลด…";
+  try {
+    const envText = await encryptVaultEnvelope(vaultDecrypted, vaultMasterPassword);
+    const pw = sessionStorage.getItem(PASS_KEY) || "";
+    const r = await fetch(`${API_BASE}/api/vault/upload`, {
+      method: "POST", mode: "cors", credentials: "omit",
+      headers: { "authorization": "Bearer " + pw, "content-type": "application/json" },
+      body: envText,
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error((j && j.error && j.error.message) || ("HTTP " + r.status));
+    }
+    const j = await r.json();
+    vaultEnvelope = JSON.parse(envText);
+    setDirty(false);
+    st.style.color = "var(--good)";
+    st.textContent = "✓ บันทึกแล้ว · v" + j.metadataVersion;
+    setTimeout(() => { if (!vaultDirty) st.textContent = ""; }, 4000);
+  } catch (e) {
+    st.style.color = "var(--bad)";
+    st.textContent = "บันทึกไม่ได้: " + e.message;
+    setDirty(true);
+  }
+});
+
+// Import button visible in the unlocked toolbar — re-uses the same upload code path
+document.getElementById("vault-file-2").addEventListener("change", async (ev) => {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  if (vaultDirty && !confirm("มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก จะถูกทิ้ง — Import ต่อแน่นะ?")) {
+    ev.target.value = "";
+    return;
+  }
+  // Push it into the existing locked-screen flow: stuff the file into the
+  // primary picker and click its button so all validation/feedback is reused.
+  const primary = document.getElementById("vault-file");
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  primary.files = dt.files;
+  document.getElementById("vault-upload-btn").click();
+  // Drop the password we held — the new vault may have a different one.
+  vaultMasterPassword = null;
+  vaultDecrypted = null;
+  setDirty(false);
+  document.getElementById("vault-app").hidden = true;
+  document.getElementById("vault-gate").style.display = "";
+  ev.target.value = "";
+});
+
+// Delete handler — attached via event delegation in the existing data-act listener
+window.__vaultDeleteEntry = function (id, isSecret) {
+  if (!vaultDecrypted) return;
+  const arr = isSecret ? vaultDecrypted.secret : vaultDecrypted.main;
+  const idx = arr.findIndex(c => c.id === id);
+  if (idx < 0) return;
+  const name = arr[idx].name || "(ไม่มีชื่อ)";
+  if (!confirm("ลบ \"" + name + "\" ?")) return;
+  arr.splice(idx, 1);
+  setDirty(true);
+  renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
+};
 
 document.getElementById("vq").addEventListener("input", (e) => {
   renderVaultEntries(e.target.value.trim().toLowerCase());
@@ -678,7 +849,7 @@ function favicon(url) {
   } catch { return ""; }
 }
 
-function credCardHTML(c) {
+function credCardHTML(c, isSecret) {
   const ico = c.icon || favicon(c.url);
   const rows = [];
   const addField = (label, value, isPw) => {
@@ -700,12 +871,17 @@ function credCardHTML(c) {
   addField("Password", c.password, true);
   if (c.url) addField("URL", c.url, false);
   (c.extra || []).forEach((f) => {
-    const isSecret = !!f.s || /key|pass|secret/i.test(f.l);
-    addField(f.l, f.v, isSecret);
+    const isPwField = !!f.s || /key|pass|secret/i.test(f.l);
+    addField(f.l, f.v, isPwField);
   });
   return `
     <div class="cred" data-name="${esc((c.name || '').toLowerCase())}">
-      <h3>${ico ? `<img src="${esc(ico)}" alt="" onerror="this.style.display='none'">` : ''}${esc(c.name || '(unnamed)')}</h3>
+      <h3>
+        ${ico ? `<img src="${esc(ico)}" alt="" onerror="this.style.display='none'">` : ''}
+        <span style="flex:1">${esc(c.name || '(unnamed)')}</span>
+        <button onclick="window.__vaultDeleteEntry('${esc(c.id || '')}', ${isSecret ? 'true' : 'false'})"
+                style="background:transparent;color:var(--bad);border:1px solid var(--border);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer">🗑 ลบ</button>
+      </h3>
       ${rows.join("")}
     </div>`;
 }
@@ -725,7 +901,7 @@ function renderVaultEntries(query) {
   const main = vaultDecrypted.main.filter(matches);
   document.getElementById("vault-main-h").textContent = `◈ Main Vault (${main.length})`;
   document.getElementById("vault-main").innerHTML = main.length
-    ? main.map(credCardHTML).join("")
+    ? main.map((c) => credCardHTML(c, false)).join("")
     : `<div class="muted">No matches.</div>`;
 
   if (showSecret || revealHidden) {
@@ -734,7 +910,7 @@ function renderVaultEntries(query) {
     document.getElementById("vault-secret").style.display = "flex";
     document.getElementById("vault-sec-h").textContent = `⟡ Hidden Grove (${sec.length})`;
     document.getElementById("vault-secret").innerHTML = sec.length
-      ? sec.map(credCardHTML).join("")
+      ? sec.map((c) => credCardHTML(c, true)).join("")
       : `<div class="muted">No matches.</div>`;
   } else {
     document.getElementById("vault-sec-h").style.display = "none";
