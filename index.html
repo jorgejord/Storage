@@ -195,6 +195,7 @@
     <button data-tab="overview" class="active">Overview</button>
     <button data-tab="explorer">Student Explorer</button>
     <button data-tab="vault">Vault</button>
+    <button data-tab="lua">Lua</button>
     <button data-tab="apps" data-asset="Mylist2.html">Mylist</button>
     <button data-tab="apps" data-asset="reg-cmu-combined.html">REG CMU</button>
     <button data-tab="apps" data-asset="CMU_Student_Explorer.html">Offline CSV</button>
@@ -241,6 +242,40 @@
       <span id="page-info">—</span>
       <button id="next">Next ›</button>
       <span class="muted" id="result-count" style="margin-left:auto"></span>
+    </div>
+  </section>
+
+  <section id="lua" hidden>
+    <div style="display:grid;grid-template-columns:260px 1fr;gap:14px;height:calc(100vh - 150px);min-height:480px">
+      <!-- File sidebar -->
+      <div class="card" style="display:flex;flex-direction:column;padding:12px;gap:10px;overflow:hidden">
+        <div style="display:flex;gap:6px">
+          <button id="lua-new-btn" style="flex:1;background:var(--accent);color:#fff;border:0;padding:8px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600">+ สร้างไฟล์</button>
+          <label for="lua-upload-input" title="อัปโหลด .lua"
+                 style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 10px;border-radius:6px;cursor:pointer;font:inherit">⬆</label>
+          <input id="lua-upload-input" type="file" accept=".lua,text/plain" multiple style="display:none">
+        </div>
+        <input id="lua-search" type="search" placeholder="🔍 ค้นหาไฟล์…" autocomplete="off" />
+        <div id="lua-file-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
+          <div class="muted" style="padding:8px">กำลังโหลด…</div>
+        </div>
+      </div>
+
+      <!-- Editor -->
+      <div class="card" style="display:flex;flex-direction:column;padding:0;overflow:hidden">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <input id="lua-active-name" placeholder="filename.lua"
+                 style="flex:1;min-width:140px;font-family:ui-monospace,monospace;font-size:13px" />
+          <span id="lua-save-status" style="font-size:12px;color:var(--muted)">no file</span>
+          <button id="lua-save-btn" disabled
+                  style="background:var(--accent);color:#fff;border:0;padding:6px 12px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600;opacity:.5">💾 บันทึก</button>
+          <button id="lua-delete-btn" disabled
+                  style="background:transparent;color:var(--bad);border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font:inherit;opacity:.5">🗑 ลบไฟล์</button>
+        </div>
+        <textarea id="lua-editor" spellcheck="false"
+                  placeholder="-- เลือกไฟล์จากแถบซ้าย หรือกด + สร้างไฟล์"
+                  style="flex:1;background:#0f1117;color:#e2e6f0;border:0;padding:14px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;line-height:1.55;resize:none;outline:none;tab-size:2"></textarea>
+      </div>
     </div>
   </section>
 
@@ -450,7 +485,205 @@ document.querySelectorAll("nav button").forEach((btn) => {
     document.querySelectorAll("main > section").forEach((s) => { s.hidden = s.id !== tab; });
     if (tab === "vault") loadVault();
     if (tab === "apps")  loadAsset(btn.dataset.asset);
+    if (tab === "lua")   luaInit();
   });
+});
+
+// =====================================================================
+// Lua Script Manager — CRUD + auto-save
+// =====================================================================
+const LUA = {
+  files: [],            // [{ name, size, modified, sha256 }]
+  active: null,         // current filename
+  loaded: false,
+  saveTimer: null,
+  lastSavedContent: "",
+};
+
+async function luaApi(method, path, body) {
+  const pw = sessionStorage.getItem(PASS_KEY) || "";
+  const opts = { method, mode: "cors", credentials: "omit", headers: { "authorization": "Bearer " + pw } };
+  if (body !== undefined) opts.body = body;
+  const r = await fetch(API_BASE + path, opts);
+  if (r.status === 401) {
+    sessionStorage.removeItem(PASS_KEY);
+    appEl.classList.remove("show"); loginEl.classList.add("show");
+    throw new Error("Session expired");
+  }
+  return r;
+}
+
+async function luaInit() {
+  if (LUA.loaded) return;
+  LUA.loaded = true;
+  await luaRefreshList();
+}
+
+async function luaRefreshList() {
+  const listEl = document.getElementById("lua-file-list");
+  try {
+    const r = await luaApi("GET", "/api/lua");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    LUA.files = j.files || [];
+    luaRenderList();
+  } catch (e) {
+    listEl.innerHTML = `<div class="err" style="padding:8px">${esc(e.message)}</div>`;
+  }
+}
+
+function luaRenderList() {
+  const q = document.getElementById("lua-search").value.trim().toLowerCase();
+  const listEl = document.getElementById("lua-file-list");
+  const filtered = LUA.files.filter(f => !q || f.name.toLowerCase().includes(q));
+  if (!filtered.length) {
+    listEl.innerHTML = `<div class="muted" style="padding:8px">${LUA.files.length === 0 ? "ยังไม่มีไฟล์ — กด <strong>+ สร้างไฟล์</strong>" : "ไม่พบไฟล์"}</div>`;
+    return;
+  }
+  listEl.innerHTML = filtered.map(f => {
+    const isActive = f.name === LUA.active;
+    const when = f.modified ? new Date(f.modified).toLocaleString() : "—";
+    return `<button data-luaname="${esc(f.name)}"
+              style="text-align:left;background:${isActive ? "var(--bg)" : "transparent"};
+                     color:var(--fg);border:1px solid ${isActive ? "var(--accent)" : "transparent"};
+                     padding:8px 10px;border-radius:6px;cursor:pointer;font:inherit;font-size:13px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span>📄</span>
+                <span style="font-family:ui-monospace,monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+              </div>
+              <div class="muted" style="font-size:11px;margin-top:2px">${esc(when)} · ${f.size} B</div>
+            </button>`;
+  }).join("");
+  listEl.querySelectorAll("[data-luaname]").forEach(b => {
+    b.addEventListener("click", () => luaOpen(b.dataset.luaname));
+  });
+}
+
+async function luaOpen(name) {
+  if (LUA.saveTimer) { clearTimeout(LUA.saveTimer); LUA.saveTimer = null; await luaSave(true); }
+  LUA.active = name;
+  document.getElementById("lua-active-name").value = name;
+  document.getElementById("lua-save-status").textContent = "loading…";
+  document.getElementById("lua-save-btn").disabled = false;
+  document.getElementById("lua-save-btn").style.opacity = "1";
+  document.getElementById("lua-delete-btn").disabled = false;
+  document.getElementById("lua-delete-btn").style.opacity = "1";
+  try {
+    const r = await luaApi("GET", "/api/lua/" + encodeURIComponent(name));
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const text = await r.text();
+    document.getElementById("lua-editor").value = text;
+    LUA.lastSavedContent = text;
+    document.getElementById("lua-save-status").textContent = "✓ saved";
+    document.getElementById("lua-save-status").style.color = "var(--muted)";
+    luaRenderList();
+  } catch (e) {
+    document.getElementById("lua-save-status").textContent = "load failed: " + e.message;
+    document.getElementById("lua-save-status").style.color = "var(--bad)";
+  }
+}
+
+async function luaSave(silent) {
+  const name = document.getElementById("lua-active-name").value.trim();
+  if (!name) { if (!silent) alert("ตั้งชื่อไฟล์ก่อน (ลงท้าย .lua)"); return; }
+  if (!/^[A-Za-z0-9._-]+\.lua$/.test(name)) {
+    if (!silent) alert("ชื่อไฟล์ต้องลงท้าย .lua และมีแค่ A-Z a-z 0-9 . _ -");
+    return;
+  }
+  const content = document.getElementById("lua-editor").value;
+  if (content === LUA.lastSavedContent && name === LUA.active) {
+    document.getElementById("lua-save-status").textContent = "✓ saved";
+    document.getElementById("lua-save-status").style.color = "var(--muted)";
+    return;
+  }
+  const st = document.getElementById("lua-save-status");
+  st.textContent = "saving…"; st.style.color = "var(--muted)";
+  try {
+    const r = await luaApi("PUT", "/api/lua/" + encodeURIComponent(name), content);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error((j.error && j.error.message) || ("HTTP " + r.status));
+    }
+    const j = await r.json();
+    LUA.lastSavedContent = content;
+    LUA.active = name;
+    st.textContent = "✓ saved " + new Date().toLocaleTimeString();
+    st.style.color = "var(--good)";
+    await luaRefreshList();
+  } catch (e) {
+    st.textContent = "save failed: " + e.message;
+    st.style.color = "var(--bad)";
+  }
+}
+
+function luaScheduleSave() {
+  if (LUA.saveTimer) clearTimeout(LUA.saveTimer);
+  const st = document.getElementById("lua-save-status");
+  st.textContent = "● unsaved"; st.style.color = "var(--warn)";
+  LUA.saveTimer = setTimeout(() => { LUA.saveTimer = null; luaSave(true); }, 1500);
+}
+
+function luaCreateNew() {
+  let n = "untitled.lua", i = 1;
+  while (LUA.files.some(f => f.name === n)) { n = `untitled${++i}.lua`; }
+  LUA.active = n;
+  LUA.lastSavedContent = "";
+  document.getElementById("lua-active-name").value = n;
+  document.getElementById("lua-editor").value = "-- " + n + "\n\n";
+  document.getElementById("lua-save-btn").disabled = false;
+  document.getElementById("lua-save-btn").style.opacity = "1";
+  document.getElementById("lua-delete-btn").disabled = false;
+  document.getElementById("lua-delete-btn").style.opacity = "1";
+  document.getElementById("lua-editor").focus();
+  luaScheduleSave();
+}
+
+async function luaDelete() {
+  if (!LUA.active) return;
+  if (!confirm("ลบ \"" + LUA.active + "\" ?")) return;
+  try {
+    await luaApi("DELETE", "/api/lua/" + encodeURIComponent(LUA.active));
+    LUA.active = null;
+    LUA.lastSavedContent = "";
+    document.getElementById("lua-active-name").value = "";
+    document.getElementById("lua-editor").value = "";
+    document.getElementById("lua-save-btn").disabled = true;
+    document.getElementById("lua-save-btn").style.opacity = ".5";
+    document.getElementById("lua-delete-btn").disabled = true;
+    document.getElementById("lua-delete-btn").style.opacity = ".5";
+    document.getElementById("lua-save-status").textContent = "deleted";
+    document.getElementById("lua-save-status").style.color = "var(--muted)";
+    await luaRefreshList();
+  } catch (e) {
+    document.getElementById("lua-save-status").textContent = "delete failed: " + e.message;
+    document.getElementById("lua-save-status").style.color = "var(--bad)";
+  }
+}
+
+document.getElementById("lua-new-btn").addEventListener("click", luaCreateNew);
+document.getElementById("lua-save-btn").addEventListener("click", () => luaSave(false));
+document.getElementById("lua-delete-btn").addEventListener("click", luaDelete);
+document.getElementById("lua-editor").addEventListener("input", luaScheduleSave);
+document.getElementById("lua-active-name").addEventListener("input", luaScheduleSave);
+document.getElementById("lua-search").addEventListener("input", luaRenderList);
+document.getElementById("lua-upload-input").addEventListener("change", async (e) => {
+  for (const f of e.target.files) {
+    const text = await f.text();
+    LUA.active = f.name;
+    document.getElementById("lua-active-name").value = f.name;
+    document.getElementById("lua-editor").value = text;
+    LUA.lastSavedContent = "";
+    await luaSave(true);
+  }
+  e.target.value = "";
+});
+// Ctrl/Cmd+S inside the editor → manual save
+document.getElementById("lua-editor").addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    if (LUA.saveTimer) { clearTimeout(LUA.saveTimer); LUA.saveTimer = null; }
+    luaSave(false);
+  }
 });
 
 // ----- Private asset loader -------------------------------------------
