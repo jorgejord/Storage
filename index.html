@@ -543,20 +543,70 @@ function luaRenderList() {
   listEl.innerHTML = filtered.map(f => {
     const isActive = f.name === LUA.active;
     const when = f.modified ? new Date(f.modified).toLocaleString() : "—";
-    return `<button data-luaname="${esc(f.name)}"
-              style="text-align:left;background:${isActive ? "var(--bg)" : "transparent"};
-                     color:var(--fg);border:1px solid ${isActive ? "var(--accent)" : "transparent"};
-                     padding:8px 10px;border-radius:6px;cursor:pointer;font:inherit;font-size:13px">
-              <div style="display:flex;align-items:center;gap:6px">
-                <span>📄</span>
-                <span style="font-family:ui-monospace,monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
-              </div>
-              <div class="muted" style="font-size:11px;margin-top:2px">${esc(when)} · ${f.size} B</div>
-            </button>`;
+    return `<div style="display:flex;align-items:stretch;gap:4px">
+              <button data-luaname="${esc(f.name)}"
+                style="flex:1;min-width:0;text-align:left;background:${isActive ? "var(--bg)" : "transparent"};
+                       color:var(--fg);border:1px solid ${isActive ? "var(--accent)" : "transparent"};
+                       padding:8px 10px;border-radius:6px;cursor:pointer;font:inherit;font-size:13px">
+                <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                  <span>📄</span>
+                  <span style="font-family:ui-monospace,monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+                </div>
+                <div class="muted" style="font-size:11px;margin-top:2px">${esc(when)} · ${f.size} B</div>
+              </button>
+              <button data-luacopy="${esc(f.name)}" title="คัดลอกเนื้อหา"
+                style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);
+                       padding:0 10px;border-radius:6px;cursor:pointer;font:inherit;font-size:14px;
+                       min-width:36px;display:flex;align-items:center;justify-content:center">📋</button>
+            </div>`;
   }).join("");
   listEl.querySelectorAll("[data-luaname]").forEach(b => {
     b.addEventListener("click", () => luaOpen(b.dataset.luaname));
   });
+  listEl.querySelectorAll("[data-luacopy]").forEach(b => {
+    b.addEventListener("click", (e) => { e.stopPropagation(); luaCopy(b.dataset.luacopy, b); });
+  });
+}
+
+async function luaCopy(name, btn) {
+  const original = btn.textContent;
+  const originalBg = btn.style.background;
+  btn.textContent = "…";
+  btn.disabled = true;
+  try {
+    // Prefer the live editor buffer when copying the active file — avoids
+    // a round-trip and copies whatever is on screen (incl. unsaved edits).
+    let text;
+    if (name === LUA.active) {
+      text = document.getElementById("lua-editor").value;
+    } else {
+      const r = await luaApi("GET", "/api/lua/" + encodeURIComponent(name));
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      text = await r.text();
+    }
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "✓";
+    btn.style.background = "var(--good)";
+    btn.style.color = "#fff";
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.style.background = originalBg;
+      btn.style.color = "";
+      btn.disabled = false;
+    }, 1200);
+  } catch (e) {
+    btn.textContent = "✗";
+    btn.style.background = "var(--bad)";
+    btn.style.color = "#fff";
+    btn.title = "คัดลอกไม่ได้: " + e.message;
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.style.background = originalBg;
+      btn.style.color = "";
+      btn.title = "คัดลอกเนื้อหา";
+      btn.disabled = false;
+    }, 1500);
+  }
 }
 
 async function luaOpen(name) {
