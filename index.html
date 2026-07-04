@@ -325,7 +325,7 @@
     <!-- Decrypted contents (shown after successful unlock) -->
     <div id="vault-app" hidden>
       <div class="filters">
-        <input id="vq" type="search" placeholder="Search vault entries…" autocomplete="off" />
+        <input id="vq" type="search" placeholder="Search name, email, username, phone, notes…" autocomplete="off" />
         <button id="vault-add-btn"
                 style="background:var(--good);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600">+ เพิ่มรหัส</button>
         <button id="vault-save-btn" disabled
@@ -339,13 +339,34 @@
         <button id="vault-relock"
                 style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">🔒 Re-lock</button>
       </div>
+      <div class="vault-type-filter" id="vault-type-filter">
+        <button type="button" class="vtype-chip active" data-vtype="all">All</button>
+        <button type="button" class="vtype-chip" data-vtype="login">🔑 Login</button>
+        <button type="button" class="vtype-chip" data-vtype="phone">📱 Phone</button>
+        <button type="button" class="vtype-chip" data-vtype="note">📝 Note</button>
+      </div>
+      <div class="vault-hint">Tip: click anywhere on a card to edit it.</div>
 
-      <!-- Add-credential form (hidden until + เพิ่มรหัส clicked) -->
+      <!-- Add/Edit credential form (hidden until + เพิ่มรหัส or a card is clicked) -->
       <div id="vault-add-form" class="card" style="display:none;margin-bottom:14px">
-        <h3 style="margin:0 0 10px;font-size:14px">เพิ่มรหัสใหม่</h3>
+        <input type="hidden" id="vc-id">
+        <input type="hidden" id="vc-orig-loc">
+        <h3 id="vc-form-title" style="margin:0 0 10px;font-size:14px">เพิ่มรหัสใหม่</h3>
+        <div class="vault-type-tabs" id="vault-type-tabs">
+          <button type="button" class="vault-type-tab active" data-vctype="login">🔑 Login</button>
+          <button type="button" class="vault-type-tab" data-vctype="phone">📱 Phone</button>
+          <button type="button" class="vault-type-tab" data-vctype="note">📝 Note</button>
+        </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">ชื่อ App *</label>
+          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">ชื่อ *</label>
                <input id="vc-name" type="text" style="width:100%"></div>
+          <div id="vc-loc-wrap"><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">เก็บใน</label>
+               <select id="vc-loc" style="width:100%">
+                 <option value="main">◈ Main Vault</option>
+                 <option value="secret">⟡ Hidden Grove</option>
+               </select></div>
+        </div>
+        <div id="vc-login-fields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px">
           <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">URL</label>
                <input id="vc-url" type="text" style="width:100%"></div>
           <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">Email</label>
@@ -354,11 +375,14 @@
                <input id="vc-user" type="text" style="width:100%"></div>
           <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">Password</label>
                <input id="vc-pw" type="text" style="width:100%;font-family:ui-monospace,monospace"></div>
-          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">เก็บใน</label>
-               <select id="vc-loc" style="width:100%">
-                 <option value="main">◈ Main Vault</option>
-                 <option value="secret">⟡ Hidden Grove</option>
-               </select></div>
+        </div>
+        <div id="vc-phone-fields" style="display:none;margin-top:10px">
+          <label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">เบอร์โทร</label>
+          <input id="vc-phone" type="text" style="width:100%" placeholder="e.g. 0634121018">
+        </div>
+        <div id="vc-note-fields" style="display:none;margin-top:10px">
+          <label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">Note</label>
+          <textarea id="vc-note" style="width:100%;min-height:80px;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:8px"></textarea>
         </div>
         <div style="margin-top:12px;display:flex;gap:8px">
           <button id="vc-save"   style="background:var(--accent);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600">เพิ่ม</button>
@@ -377,6 +401,7 @@
     .cred {
       background: var(--bg-2); border: 1px solid var(--border);
       border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+      cursor: pointer;
     }
     .cred h3 { margin: 0 0 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
     .cred h3 img { width: 18px; height: 18px; border-radius: 3px; }
@@ -384,13 +409,21 @@
     .cred .field .l { color: var(--muted); min-width: 90px; flex: 0 0 90px; text-transform: uppercase; font-size: 11px; letter-spacing: .5px; }
     .cred .field .v { word-break: break-all; }
     .cred .field .v.pw { font-family: ui-monospace, monospace; }
-    .cred .field button {
+    .cred .field button, .cred h3 button, .cred h3 a {
       margin-left: auto; background: transparent; color: var(--accent);
       border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px;
-      font: inherit; font-size: 11px; cursor: pointer;
+      font: inherit; font-size: 11px; cursor: pointer; text-decoration: none;
     }
-    .cred .field button:hover { background: var(--bg); }
+    .cred .field button:hover, .cred h3 button:hover, .cred h3 a:hover { background: var(--bg); }
     .cred .field button.copied { color: var(--good); border-color: var(--good); }
+    .cred .note-text { white-space: pre-wrap; font-size: 13px; padding: 4px 0; }
+    .vault-type-tabs { display: flex; gap: 4px; margin-bottom: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px; }
+    .vault-type-tab { flex: 1; padding: 6px 4px; background: transparent; border: 0; border-radius: 5px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); }
+    .vault-type-tab.active { background: var(--accent); color: #fff; }
+    .vault-type-filter { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
+    .vtype-chip { padding: 5px 12px; border-radius: 14px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .vtype-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .vault-hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
   </style>
 </main>
 <footer>
@@ -1016,33 +1049,76 @@ async function encryptVaultEnvelope(obj, password) {
   return JSON.stringify({ v: 1, salt: b64(salt.buffer), iv: b64(iv.buffer), data: b64(ct) });
 }
 
-// Open / cancel the add form
-document.getElementById("vault-add-btn").addEventListener("click", () => {
-  ["vc-name","vc-url","vc-email","vc-user","vc-pw"].forEach(id => document.getElementById(id).value = "");
-  document.getElementById("vc-loc").value = "main";
+// ----- Add/Edit form: shared open/reset + type tabs --------------------
+let vcCurrentType = "login";
+function setVcType(t) {
+  vcCurrentType = t;
+  document.querySelectorAll("#vault-type-tabs .vault-type-tab").forEach(b => b.classList.toggle("active", b.dataset.vctype === t));
+  document.getElementById("vc-login-fields").style.display = t === "login" ? "grid" : "none";
+  document.getElementById("vc-phone-fields").style.display = t === "phone" ? "block" : "none";
+  document.getElementById("vc-note-fields").style.display  = t === "note"  ? "block" : "none";
+}
+document.querySelectorAll("#vault-type-tabs .vault-type-tab").forEach(b =>
+  b.addEventListener("click", () => setVcType(b.dataset.vctype)));
+
+function openVaultForm(entry, isSecretLoc) {
   document.getElementById("vc-err").textContent = "";
+  document.getElementById("vc-id").value = entry ? entry.id : "";
+  document.getElementById("vc-orig-loc").value = isSecretLoc ? "secret" : "main";
+  document.getElementById("vc-loc").value = isSecretLoc ? "secret" : "main";
+  document.getElementById("vc-form-title").textContent = entry ? "แก้ไขรหัส" : "เพิ่มรหัสใหม่";
+  document.getElementById("vc-save").textContent = entry ? "บันทึก" : "เพิ่ม";
+  document.getElementById("vc-name").value  = entry?.name || "";
+  document.getElementById("vc-url").value   = entry?.url || "";
+  document.getElementById("vc-email").value = entry?.email || "";
+  document.getElementById("vc-user").value  = entry?.username || "";
+  document.getElementById("vc-pw").value    = entry?.password || "";
+  document.getElementById("vc-phone").value = entry?.phone || "";
+  document.getElementById("vc-note").value  = entry?.note || "";
+  setVcType(entry?.type || "login");
   document.getElementById("vault-add-form").style.display = "block";
   document.getElementById("vc-name").focus();
-});
+}
+
+window.__vaultEditEntry = function (id, isSecret) {
+  if (!vaultDecrypted) return;
+  const arr = isSecret ? vaultDecrypted.secret : vaultDecrypted.main;
+  const entry = arr.find(c => c.id === id);
+  if (!entry) return;
+  openVaultForm(entry, isSecret);
+};
+
+document.getElementById("vault-add-btn").addEventListener("click", () => openVaultForm(null, false));
 document.getElementById("vc-cancel").addEventListener("click", () => {
   document.getElementById("vault-add-form").style.display = "none";
 });
 
-// Add the new credential
+// Add or update the credential (edit mode detected via vc-id)
 document.getElementById("vc-save").addEventListener("click", () => {
   const name = document.getElementById("vc-name").value.trim();
   const err  = document.getElementById("vc-err");
-  if (!name) { err.textContent = "ต้องใส่ชื่อ App"; return; }
-  const entry = {
-    id:       genId(),
-    name,
-    url:      document.getElementById("vc-url").value.trim(),
-    icon:     "",
-    email:    document.getElementById("vc-email").value.trim(),
-    username: document.getElementById("vc-user").value.trim(),
-    password: document.getElementById("vc-pw").value,
-    extra:    [],
-  };
+  if (!name) { err.textContent = "ต้องใส่ชื่อ"; return; }
+  const editId = document.getElementById("vc-id").value;
+  const entry = { id: editId || genId(), name, type: vcCurrentType, extra: [] };
+  if (vcCurrentType === "login") {
+    entry.url = document.getElementById("vc-url").value.trim();
+    entry.icon = "";
+    entry.email = document.getElementById("vc-email").value.trim();
+    entry.username = document.getElementById("vc-user").value.trim();
+    entry.password = document.getElementById("vc-pw").value;
+  } else if (vcCurrentType === "phone") {
+    entry.phone = document.getElementById("vc-phone").value.trim();
+    if (!entry.phone) { err.textContent = "ต้องใส่เบอร์โทร"; return; }
+  } else if (vcCurrentType === "note") {
+    entry.note = document.getElementById("vc-note").value;
+    if (!entry.note.trim()) { err.textContent = "ต้องใส่เนื้อหา Note"; return; }
+  }
+  if (editId) {
+    const origLoc = document.getElementById("vc-orig-loc").value;
+    const origArr = origLoc === "secret" ? vaultDecrypted.secret : vaultDecrypted.main;
+    const idx = origArr.findIndex(x => x.id === editId);
+    if (idx > -1) origArr.splice(idx, 1);
+  }
   const loc = document.getElementById("vc-loc").value;
   (loc === "secret" ? vaultDecrypted.secret : vaultDecrypted.main).push(entry);
   setDirty(true);
@@ -1133,7 +1209,9 @@ function favicon(url) {
 }
 
 function credCardHTML(c, isSecret) {
+  const type = c.type || "login";
   const ico = c.icon || favicon(c.url);
+  const badge = type === "phone" ? "📱" : type === "note" ? "📝" : "";
   const rows = [];
   const addField = (label, value, isPw) => {
     if (!value) return;
@@ -1149,25 +1227,48 @@ function credCardHTML(c, isSecret) {
         <button data-act="copy" data-val="${esc(value)}">Copy</button>
       </div>`);
   };
-  addField("Email", c.email, false);
-  addField("Username", c.username, false);
-  addField("Password", c.password, true);
-  if (c.url) addField("URL", c.url, false);
+  if (type === "phone") {
+    if (c.phone) {
+      rows.push(`
+        <div class="field">
+          <span class="l">Phone</span>
+          <span class="v">${esc(c.phone)}</span>
+          <a href="tel:${esc(c.phone)}">Call</a>
+          <button data-act="copy" data-val="${esc(c.phone)}">Copy</button>
+        </div>`);
+    }
+  } else if (type === "note") {
+    if (c.note) rows.push(`<div class="note-text">${esc(c.note)}</div>`);
+  } else {
+    addField("Email", c.email, false);
+    addField("Username", c.username, false);
+    addField("Password", c.password, true);
+    if (c.url) addField("URL", c.url, false);
+  }
   (c.extra || []).forEach((f) => {
     const isPwField = !!f.s || /key|pass|secret/i.test(f.l);
     addField(f.l, f.v, isPwField);
   });
   return `
-    <div class="cred" data-name="${esc((c.name || '').toLowerCase())}">
+    <div class="cred" data-name="${esc((c.name || '').toLowerCase())}" data-id="${esc(c.id || '')}" data-secret="${isSecret ? '1' : '0'}">
       <h3>
-        ${ico ? `<img src="${esc(ico)}" alt="" onerror="this.style.display='none'">` : ''}
+        ${ico ? `<img src="${esc(ico)}" alt="" onerror="this.style.display='none'">` : (badge ? `<span>${badge}</span>` : '')}
         <span style="flex:1">${esc(c.name || '(unnamed)')}</span>
+        <button onclick="window.__vaultEditEntry('${esc(c.id || '')}', ${isSecret ? 'true' : 'false'})"
+                style="color:var(--accent)">✎ แก้ไข</button>
         <button onclick="window.__vaultDeleteEntry('${esc(c.id || '')}', ${isSecret ? 'true' : 'false'})"
                 style="background:transparent;color:var(--bad);border:1px solid var(--border);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer">🗑 ลบ</button>
       </h3>
       ${rows.join("")}
     </div>`;
 }
+
+let vaultTypeFilter = "all";
+document.querySelectorAll("#vault-type-filter .vtype-chip").forEach(b => b.addEventListener("click", () => {
+  vaultTypeFilter = b.dataset.vtype;
+  document.querySelectorAll("#vault-type-filter .vtype-chip").forEach(x => x.classList.toggle("active", x === b));
+  renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
+}));
 
 function renderVaultEntries(query) {
   if (!vaultDecrypted) return;
@@ -1177,9 +1278,14 @@ function renderVaultEntries(query) {
   const revealHidden = vaultDecrypted.secretCode && q === vaultDecrypted.secretCode.toLowerCase();
   const showSecret = revealHidden || (vaultDecrypted.secret && vaultDecrypted.secret.length > 0 && q !== "");
 
-  const matches = (c) => !q || (c.name || "").toLowerCase().includes(q)
-                              || (c.email || "").toLowerCase().includes(q)
-                              || (c.username || "").toLowerCase().includes(q);
+  const matches = (c) => {
+    if (vaultTypeFilter !== "all" && (c.type || "login") !== vaultTypeFilter) return false;
+    if (!q) return true;
+    const hay = [c.name, c.email, c.username, c.phone, c.note,
+      ...(c.extra || []).filter(f => !f.s).flatMap(f => [f.l, f.v]),
+    ].filter(Boolean).join(" ").toLowerCase();
+    return hay.includes(q);
+  };
 
   const main = vaultDecrypted.main.filter(matches);
   document.getElementById("vault-main-h").textContent = `◈ Main Vault (${main.length})`;
@@ -1221,6 +1327,15 @@ document.addEventListener("click", (e) => {
       t.textContent = "Reveal";
     }
   }
+});
+
+// Click anywhere on a vault card (that isn't a button/link) to edit it.
+document.addEventListener("click", (e) => {
+  const card = e.target.closest(".cred");
+  if (!card) return;
+  if (e.target.closest("button") || e.target.closest("a")) return;
+  const id = card.dataset.id;
+  if (id) window.__vaultEditEntry(id, card.dataset.secret === "1");
 });
 
 // ============================================================
