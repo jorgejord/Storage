@@ -384,6 +384,12 @@
           <label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">Note</label>
           <textarea id="vc-note" style="width:100%;min-height:80px;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:8px"></textarea>
         </div>
+        <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:10px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Extra Fields — เช่น อีเมล/รหัสผ่านตัวที่สอง</div>
+          <div id="vc-extra-container"></div>
+          <button type="button" id="vc-add-field"
+                  style="background:transparent;border:1px dashed var(--border);color:var(--muted);padding:6px 12px;border-radius:6px;cursor:pointer;font:inherit;font-size:12px;width:100%">+ เพิ่มช่องข้อมูล</button>
+        </div>
         <div style="margin-top:12px;display:flex;gap:8px">
           <button id="vc-save"   style="background:var(--accent);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600">เพิ่ม</button>
           <button id="vc-cancel" style="background:transparent;color:var(--muted);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">ยกเลิก</button>
@@ -424,6 +430,12 @@
     .vtype-chip { padding: 5px 12px; border-radius: 14px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
     .vtype-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     .vault-hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+    .vc-ef-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+    .vc-ef-row input { flex: 1; padding: 6px 8px; font: inherit; font-size: 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 5px; }
+    .vc-ef-row input.vc-ef-l { flex: 0 0 120px; }
+    .vc-ef-row button { flex-shrink: 0; background: transparent; border: 1px solid var(--border); border-radius: 5px; cursor: pointer; color: var(--muted); font-size: 12px; padding: 5px 8px; }
+    .vc-ef-row button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .vc-ef-row button.vc-ef-rm { color: var(--bad); }
   </style>
 </main>
 <footer>
@@ -1061,6 +1073,24 @@ function setVcType(t) {
 document.querySelectorAll("#vault-type-tabs .vault-type-tab").forEach(b =>
   b.addEventListener("click", () => setVcType(b.dataset.vctype)));
 
+// ----- Extra fields (e.g. a second email/password on the same entry) ---
+function addVcField(l = "", v = "", secret = false) {
+  const row = document.createElement("div");
+  row.className = "vc-ef-row";
+  row.innerHTML = `
+    <input type="text" class="vc-ef-l" placeholder="Label" value="${esc(l)}">
+    <input type="${secret ? 'password' : 'text'}" class="vc-ef-v" placeholder="Value" value="${esc(v)}">
+    <button type="button" class="vc-ef-sec${secret ? ' on' : ''}" title="Hide value">🔒</button>
+    <button type="button" class="vc-ef-rm" title="Remove">×</button>`;
+  row.querySelector(".vc-ef-sec").addEventListener("click", (e) => {
+    const on = e.currentTarget.classList.toggle("on");
+    row.querySelector(".vc-ef-v").type = on ? "password" : "text";
+  });
+  row.querySelector(".vc-ef-rm").addEventListener("click", () => row.remove());
+  document.getElementById("vc-extra-container").appendChild(row);
+}
+document.getElementById("vc-add-field").addEventListener("click", () => addVcField());
+
 function openVaultForm(entry, isSecretLoc) {
   document.getElementById("vc-err").textContent = "";
   document.getElementById("vc-id").value = entry ? entry.id : "";
@@ -1075,6 +1105,8 @@ function openVaultForm(entry, isSecretLoc) {
   document.getElementById("vc-pw").value    = entry?.password || "";
   document.getElementById("vc-phone").value = entry?.phone || "";
   document.getElementById("vc-note").value  = entry?.note || "";
+  document.getElementById("vc-extra-container").innerHTML = "";
+  (entry?.extra || []).forEach(f => addVcField(f.l, f.v, !!f.s));
   setVcType(entry?.type || "login");
   document.getElementById("vault-add-form").style.display = "block";
   document.getElementById("vc-name").focus();
@@ -1099,7 +1131,14 @@ document.getElementById("vc-save").addEventListener("click", () => {
   const err  = document.getElementById("vc-err");
   if (!name) { err.textContent = "ต้องใส่ชื่อ"; return; }
   const editId = document.getElementById("vc-id").value;
-  const entry = { id: editId || genId(), name, type: vcCurrentType, extra: [] };
+  const extra = [];
+  document.querySelectorAll("#vc-extra-container .vc-ef-row").forEach(row => {
+    const l = row.querySelector(".vc-ef-l").value.trim();
+    const v = row.querySelector(".vc-ef-v").value.trim();
+    const s = row.querySelector(".vc-ef-sec").classList.contains("on");
+    if (l) extra.push({ l, v, ...(s ? { s: true } : {}) });
+  });
+  const entry = { id: editId || genId(), name, type: vcCurrentType, extra };
   if (vcCurrentType === "login") {
     entry.url = document.getElementById("vc-url").value.trim();
     entry.icon = "";
