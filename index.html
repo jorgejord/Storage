@@ -362,17 +362,6 @@
         <button type="button" class="vtype-chip" data-vtype="phone">📱 Phone</button>
         <button type="button" class="vtype-chip" data-vtype="note">📝 Note</button>
       </div>
-      <div class="vault-type-filter" id="vault-cat-filter">
-        <button type="button" class="vtype-chip active" data-vcat="all">ทุกหมวด</button>
-        <button type="button" class="vtype-chip" data-vcat="gaming">🎮 เกม</button>
-        <button type="button" class="vtype-chip" data-vcat="social">💬 โซเชียล</button>
-        <button type="button" class="vtype-chip" data-vcat="shopping">🛒 ช้อปปิ้ง</button>
-        <button type="button" class="vtype-chip" data-vcat="banking">🏦 ธนาคาร</button>
-        <button type="button" class="vtype-chip" data-vcat="email">✉️ อีเมล</button>
-        <button type="button" class="vtype-chip" data-vcat="work">💼 งาน</button>
-        <button type="button" class="vtype-chip" data-vcat="other">📦 อื่นๆ</button>
-        <button type="button" class="vtype-chip" data-vcat="uncategorized">— ไม่มีหมวด</button>
-      </div>
       <div class="vault-hint">Tip: click anywhere on a card to edit it.</div>
 
       <!-- Add/Edit credential form (hidden until + เพิ่มรหัส or a card is clicked) -->
@@ -385,6 +374,13 @@
           <button type="button" class="vault-type-tab" data-vctype="phone">📱 Phone</button>
           <button type="button" class="vault-type-tab" data-vctype="note">📝 Note</button>
         </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <img id="vc-icon-preview" alt="" style="width:36px;height:36px;border-radius:6px;background:var(--bg);border:1px solid var(--border);object-fit:contain;display:none">
+          <div id="vc-icon-placeholder" style="width:36px;height:36px;border-radius:6px;background:var(--bg);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--muted)">🌐</div>
+          <label for="vc-icon-file" style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">📷 เลือกไอคอนเว็บ</label>
+          <input id="vc-icon-file" type="file" accept="image/*" style="display:none">
+          <button type="button" id="vc-icon-clear" style="background:transparent;color:var(--muted);border:1px solid var(--border);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;display:none">ล้างไอคอน</button>
+        </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
           <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">ชื่อ *</label>
                <input id="vc-name" type="text" style="width:100%"></div>
@@ -392,17 +388,6 @@
                <select id="vc-loc" style="width:100%">
                  <option value="main">◈ Main Vault</option>
                  <option value="secret">⟡ Hidden Grove</option>
-               </select></div>
-          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">หมวดหมู่</label>
-               <select id="vc-category" style="width:100%">
-                 <option value="">— ไม่ระบุ —</option>
-                 <option value="gaming">🎮 เกม</option>
-                 <option value="social">💬 โซเชียล</option>
-                 <option value="shopping">🛒 ช้อปปิ้ง</option>
-                 <option value="banking">🏦 ธนาคาร</option>
-                 <option value="email">✉️ อีเมล</option>
-                 <option value="work">💼 งาน</option>
-                 <option value="other">📦 อื่นๆ</option>
                </select></div>
         </div>
         <div id="vc-login-fields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px">
@@ -456,7 +441,6 @@
       font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;
     }
     .cred h3 img { width: 20px; height: 20px; border-radius: 4px; }
-    .cred .cat-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
     .cred .field {
       display: grid; grid-template-columns: 92px 1fr 64px 64px; column-gap: 10px; align-items: center;
       padding: 7px 0; font-size: 13px; border-bottom: 1px solid rgba(127,127,127,.12);
@@ -1152,6 +1136,35 @@ function addVcField(l = "", v = "", secret = false) {
 }
 document.getElementById("vc-add-field").addEventListener("click", () => addVcField());
 
+// ----- Icon upload (custom website icon, stored as a data URL) ---------
+let vcIconDataUrl = "";
+function updateVcIconPreview() {
+  const img = document.getElementById("vc-icon-preview");
+  const ph  = document.getElementById("vc-icon-placeholder");
+  const clr = document.getElementById("vc-icon-clear");
+  if (vcIconDataUrl) {
+    img.src = vcIconDataUrl; img.style.display = "block";
+    ph.style.display = "none";
+    clr.style.display = "inline-block";
+  } else {
+    img.removeAttribute("src"); img.style.display = "none";
+    ph.style.display = "flex";
+    clr.style.display = "none";
+  }
+}
+document.getElementById("vc-icon-file").addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { vcIconDataUrl = reader.result; updateVcIconPreview(); };
+  reader.readAsDataURL(file);
+});
+document.getElementById("vc-icon-clear").addEventListener("click", () => {
+  vcIconDataUrl = "";
+  document.getElementById("vc-icon-file").value = "";
+  updateVcIconPreview();
+});
+
 function openVaultForm(entry, isSecretLoc) {
   document.getElementById("vc-err").textContent = "";
   document.getElementById("vc-id").value = entry ? entry.id : "";
@@ -1166,9 +1179,11 @@ function openVaultForm(entry, isSecretLoc) {
   document.getElementById("vc-pw").value    = entry?.password || "";
   document.getElementById("vc-phone").value = entry?.phone || "";
   document.getElementById("vc-note").value  = entry?.note || "";
-  document.getElementById("vc-category").value = entry?.category || "";
   document.getElementById("vc-extra-container").innerHTML = "";
   (entry?.extra || []).forEach(f => addVcField(f.l, f.v, !!f.s));
+  vcIconDataUrl = entry?.icon || "";
+  document.getElementById("vc-icon-file").value = "";
+  updateVcIconPreview();
   setVcType(entry?.type || "login");
   document.getElementById("vault-add-form").style.display = "block";
   document.getElementById("vc-name").focus();
@@ -1200,8 +1215,7 @@ document.getElementById("vc-save").addEventListener("click", () => {
     const s = row.querySelector(".vc-ef-sec").classList.contains("on");
     if (l) extra.push({ l, v, ...(s ? { s: true } : {}) });
   });
-  const category = document.getElementById("vc-category").value;
-  const entry = { id: editId || genId(), name, type: vcCurrentType, extra, ...(category ? { category } : {}) };
+  const entry = { id: editId || genId(), name, type: vcCurrentType, extra };
   if (vcCurrentType === "login") {
     entry.url = document.getElementById("vc-url").value.trim();
     entry.icon = "";
@@ -1215,6 +1229,7 @@ document.getElementById("vc-save").addEventListener("click", () => {
     entry.note = document.getElementById("vc-note").value;
     if (!entry.note.trim()) { err.textContent = "ต้องใส่เนื้อหา Note"; return; }
   }
+  if (vcIconDataUrl) entry.icon = vcIconDataUrl;
   if (editId) {
     const origLoc = document.getElementById("vc-orig-loc").value;
     const origArr = origLoc === "secret" ? vaultDecrypted.secret : vaultDecrypted.main;
@@ -1333,11 +1348,6 @@ function favicon(url) {
   } catch { return ""; }
 }
 
-const CATEGORY_LABELS = {
-  gaming: "🎮 เกม", social: "💬 โซเชียล", shopping: "🛒 ช้อปปิ้ง",
-  banking: "🏦 ธนาคาร", email: "✉️ อีเมล", work: "💼 งาน", other: "📦 อื่นๆ",
-};
-
 function credCardHTML(c, isSecret) {
   const type = c.type || "login";
   const ico = c.icon || favicon(c.url);
@@ -1384,7 +1394,6 @@ function credCardHTML(c, isSecret) {
       <h3>
         ${ico ? `<img src="${esc(ico)}" alt="" onerror="this.style.display='none'">` : (badge ? `<span>${badge}</span>` : '')}
         <span style="flex:1">${esc(c.name || '(unnamed)')}</span>
-        ${c.category ? `<span class="cat-badge">${esc(CATEGORY_LABELS[c.category] || c.category)}</span>` : ''}
         <button onclick="window.__vaultEditEntry('${esc(c.id || '')}', ${isSecret ? 'true' : 'false'})"
                 style="color:var(--accent)">✎ แก้ไข</button>
         <button onclick="window.__vaultDeleteEntry('${esc(c.id || '')}', ${isSecret ? 'true' : 'false'})"
@@ -1398,13 +1407,6 @@ let vaultTypeFilter = "all";
 document.querySelectorAll("#vault-type-filter .vtype-chip").forEach(b => b.addEventListener("click", () => {
   vaultTypeFilter = b.dataset.vtype;
   document.querySelectorAll("#vault-type-filter .vtype-chip").forEach(x => x.classList.toggle("active", x === b));
-  renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
-}));
-
-let vaultCategoryFilter = "all";
-document.querySelectorAll("#vault-cat-filter .vtype-chip").forEach(b => b.addEventListener("click", () => {
-  vaultCategoryFilter = b.dataset.vcat;
-  document.querySelectorAll("#vault-cat-filter .vtype-chip").forEach(x => x.classList.toggle("active", x === b));
   renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
 }));
 
@@ -1449,10 +1451,6 @@ function renderVaultEntries(query) {
   const matches = (c) => {
     if (vaultNameFilter !== "all" && (c.name || "(unnamed)") !== vaultNameFilter) return false;
     if (vaultTypeFilter !== "all" && (c.type || "login") !== vaultTypeFilter) return false;
-    if (vaultCategoryFilter !== "all") {
-      const cat = c.category || "";
-      if (vaultCategoryFilter === "uncategorized" ? cat !== "" : cat !== vaultCategoryFilter) return false;
-    }
     if (!q) return true;
     let hay;
     if (vaultSearchScope === "name") hay = c.name || "";
