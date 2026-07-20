@@ -324,8 +324,23 @@
 
     <!-- Decrypted contents (shown after successful unlock) -->
     <div id="vault-app" hidden>
+    <div style="display:flex;gap:16px;align-items:flex-start">
+      <aside class="vault-sidebar" id="vault-sidebar">
+        <div class="vault-sidebar-title">◆ Filter by name</div>
+        <div id="vault-sidebar-list"></div>
+      </aside>
+      <div class="vault-content" style="flex:1;min-width:0">
       <div class="filters">
         <input id="vq" type="search" placeholder="Search name, email, username, phone, notes…" autocomplete="off" />
+        <select id="vq-scope" title="ค้นเฉพาะช่อง"
+                style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 10px;border-radius:6px;font:inherit">
+          <option value="all">ค้นทุกช่อง</option>
+          <option value="name">เฉพาะชื่อ</option>
+          <option value="email">เฉพาะ Email</option>
+          <option value="username">เฉพาะ Username</option>
+          <option value="phone">เฉพาะเบอร์โทร</option>
+          <option value="note">เฉพาะ Note</option>
+        </select>
         <button id="vault-add-btn"
                 style="background:var(--good);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600">+ เพิ่มรหัส</button>
         <button id="vault-save-btn" disabled
@@ -336,6 +351,8 @@
         <label for="vault-file-2" id="vault-import-label"
                style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">📥 Import .vault</label>
         <input id="vault-file-2" type="file" accept=".vault,application/json" style="display:none" />
+        <button id="vault-export-btn"
+                style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">📤 Export .vault</button>
         <button id="vault-relock"
                 style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">🔒 Re-lock</button>
       </div>
@@ -344,6 +361,17 @@
         <button type="button" class="vtype-chip" data-vtype="login">🔑 Login</button>
         <button type="button" class="vtype-chip" data-vtype="phone">📱 Phone</button>
         <button type="button" class="vtype-chip" data-vtype="note">📝 Note</button>
+      </div>
+      <div class="vault-type-filter" id="vault-cat-filter">
+        <button type="button" class="vtype-chip active" data-vcat="all">ทุกหมวด</button>
+        <button type="button" class="vtype-chip" data-vcat="gaming">🎮 เกม</button>
+        <button type="button" class="vtype-chip" data-vcat="social">💬 โซเชียล</button>
+        <button type="button" class="vtype-chip" data-vcat="shopping">🛒 ช้อปปิ้ง</button>
+        <button type="button" class="vtype-chip" data-vcat="banking">🏦 ธนาคาร</button>
+        <button type="button" class="vtype-chip" data-vcat="email">✉️ อีเมล</button>
+        <button type="button" class="vtype-chip" data-vcat="work">💼 งาน</button>
+        <button type="button" class="vtype-chip" data-vcat="other">📦 อื่นๆ</button>
+        <button type="button" class="vtype-chip" data-vcat="uncategorized">— ไม่มีหมวด</button>
       </div>
       <div class="vault-hint">Tip: click anywhere on a card to edit it.</div>
 
@@ -364,6 +392,17 @@
                <select id="vc-loc" style="width:100%">
                  <option value="main">◈ Main Vault</option>
                  <option value="secret">⟡ Hidden Grove</option>
+               </select></div>
+          <div><label style="display:block;color:var(--muted);font-size:11px;margin-bottom:4px">หมวดหมู่</label>
+               <select id="vc-category" style="width:100%">
+                 <option value="">— ไม่ระบุ —</option>
+                 <option value="gaming">🎮 เกม</option>
+                 <option value="social">💬 โซเชียล</option>
+                 <option value="shopping">🛒 ช้อปปิ้ง</option>
+                 <option value="banking">🏦 ธนาคาร</option>
+                 <option value="email">✉️ อีเมล</option>
+                 <option value="work">💼 งาน</option>
+                 <option value="other">📦 อื่นๆ</option>
                </select></div>
         </div>
         <div id="vc-login-fields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px">
@@ -400,6 +439,8 @@
       <div id="vault-main" class="row" style="flex-direction:column"></div>
       <h2 id="vault-sec-h" style="margin-top:24px;display:none">⟡ Hidden Grove</h2>
       <div id="vault-secret" class="row" style="flex-direction:column;display:none"></div>
+      </div>
+    </div>
     </div>
   </section>
 
@@ -409,20 +450,32 @@
       border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
       cursor: pointer;
     }
-    .cred h3 { margin: 0 0 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-    .cred h3 img { width: 18px; height: 18px; border-radius: 3px; }
-    .cred .field { display: flex; gap: 12px; padding: 4px 0; font-size: 13px; align-items: baseline; }
-    .cred .field .l { color: var(--muted); min-width: 90px; flex: 0 0 90px; text-transform: uppercase; font-size: 11px; letter-spacing: .5px; }
-    .cred .field .v { word-break: break-all; }
-    .cred .field .v.pw { font-family: ui-monospace, monospace; }
-    .cred .field button, .cred h3 button, .cred h3 a {
-      margin-left: auto; background: transparent; color: var(--accent);
-      border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px;
-      font: inherit; font-size: 11px; cursor: pointer; text-decoration: none;
+    .cred:hover { border-color: var(--accent); }
+    .cred h3 {
+      margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+      font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;
     }
-    .cred .field button:hover, .cred h3 button:hover, .cred h3 a:hover { background: var(--bg); }
+    .cred h3 img { width: 20px; height: 20px; border-radius: 4px; }
+    .cred .cat-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+    .cred .field {
+      display: grid; grid-template-columns: 92px 1fr 64px 64px; column-gap: 10px; align-items: center;
+      padding: 7px 0; font-size: 13px; border-bottom: 1px solid rgba(127,127,127,.12);
+    }
+    .cred .field:last-of-type { border-bottom: 0; }
+    .cred .field .l { color: var(--muted); text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .6px; }
+    .cred .field .v { color: var(--fg); font-weight: 500; word-break: break-all; }
+    .cred .field .v.pw { font-family: ui-monospace, monospace; letter-spacing: .5px; }
+    .cred .field .reveal-slot:empty { visibility: hidden; }
+    .cred .field button, .cred .field a, .cred h3 button, .cred h3 a {
+      background: transparent; color: var(--accent);
+      border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px;
+      font: inherit; font-size: 11px; cursor: pointer; text-decoration: none; text-align: center;
+      justify-self: start;
+    }
+    .cred h3 button, .cred h3 a { margin-left: auto; }
+    .cred .field button:hover, .cred .field a:hover, .cred h3 button:hover, .cred h3 a:hover { background: var(--bg); }
     .cred .field button.copied { color: var(--good); border-color: var(--good); }
-    .cred .note-text { white-space: pre-wrap; font-size: 13px; padding: 4px 0; }
+    .cred .note-text { white-space: pre-wrap; font-size: 13px; padding: 8px 0; color: var(--fg); }
     .vault-type-tabs { display: flex; gap: 4px; margin-bottom: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px; }
     .vault-type-tab { flex: 1; padding: 6px 4px; background: transparent; border: 0; border-radius: 5px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); }
     .vault-type-tab.active { background: var(--accent); color: #fff; }
@@ -430,6 +483,14 @@
     .vtype-chip { padding: 5px 12px; border-radius: 14px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
     .vtype-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     .vault-hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+    .vault-sidebar { flex: 0 0 200px; max-height: 78vh; overflow-y: auto; background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; position: sticky; top: 12px; }
+    .vault-sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: .6px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+    .vault-sidebar-item { display: flex; justify-content: space-between; gap: 6px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--muted); margin-bottom: 1px; }
+    .vault-sidebar-item:hover { background: var(--bg); color: var(--fg); }
+    .vault-sidebar-item.active { background: var(--accent); color: #fff; font-weight: 600; }
+    .vault-sidebar-item .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vault-sidebar-item .c { flex-shrink: 0; opacity: .75; font-size: 11px; }
+    @media (max-width: 720px) { .vault-sidebar { display: none; } }
     .vc-ef-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
     .vc-ef-row input { flex: 1; padding: 6px 8px; font: inherit; font-size: 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 5px; }
     .vc-ef-row input.vc-ef-l { flex: 0 0 120px; }
@@ -1105,6 +1166,7 @@ function openVaultForm(entry, isSecretLoc) {
   document.getElementById("vc-pw").value    = entry?.password || "";
   document.getElementById("vc-phone").value = entry?.phone || "";
   document.getElementById("vc-note").value  = entry?.note || "";
+  document.getElementById("vc-category").value = entry?.category || "";
   document.getElementById("vc-extra-container").innerHTML = "";
   (entry?.extra || []).forEach(f => addVcField(f.l, f.v, !!f.s));
   setVcType(entry?.type || "login");
@@ -1138,7 +1200,8 @@ document.getElementById("vc-save").addEventListener("click", () => {
     const s = row.querySelector(".vc-ef-sec").classList.contains("on");
     if (l) extra.push({ l, v, ...(s ? { s: true } : {}) });
   });
-  const entry = { id: editId || genId(), name, type: vcCurrentType, extra };
+  const category = document.getElementById("vc-category").value;
+  const entry = { id: editId || genId(), name, type: vcCurrentType, extra, ...(category ? { category } : {}) };
   if (vcCurrentType === "login") {
     entry.url = document.getElementById("vc-url").value.trim();
     entry.icon = "";
@@ -1198,6 +1261,29 @@ document.getElementById("vault-save-btn").addEventListener("click", async () => 
   }
 });
 
+// Export: re-encrypt the current in-memory vault and download it as a .vault file.
+// Purely local — nothing is sent anywhere, this just brings your data back OUT to disk.
+document.getElementById("vault-export-btn").addEventListener("click", async () => {
+  if (!vaultDecrypted || !vaultMasterPassword) return;
+  const btn = document.getElementById("vault-export-btn");
+  const old = btn.textContent;
+  btn.textContent = "กำลังเข้ารหัส…";
+  btn.disabled = true;
+  try {
+    const envText = await encryptVaultEnvelope(vaultDecrypted, vaultMasterPassword);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([envText], { type: "application/json" }));
+    a.download = "backup-" + new Date().toISOString().slice(0, 10) + ".vault";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    alert("Export failed: " + e.message);
+  } finally {
+    btn.textContent = old;
+    btn.disabled = false;
+  }
+});
+
 // Import button visible in the unlocked toolbar — re-uses the same upload code path
 document.getElementById("vault-file-2").addEventListener("change", async (ev) => {
   const file = ev.target.files && ev.target.files[0];
@@ -1247,6 +1333,11 @@ function favicon(url) {
   } catch { return ""; }
 }
 
+const CATEGORY_LABELS = {
+  gaming: "🎮 เกม", social: "💬 โซเชียล", shopping: "🛒 ช้อปปิ้ง",
+  banking: "🏦 ธนาคาร", email: "✉️ อีเมล", work: "💼 งาน", other: "📦 อื่นๆ",
+};
+
 function credCardHTML(c, isSecret) {
   const type = c.type || "login";
   const ico = c.icon || favicon(c.url);
@@ -1260,9 +1351,9 @@ function credCardHTML(c, isSecret) {
         <span class="v ${isPw ? 'pw' : ''}" data-pw-for="${esc(c.id || '')}-${esc(label)}">
           ${isPw ? '••••••••' : esc(value)}
         </span>
-        ${isPw
+        <span class="reveal-slot">${isPw
           ? `<button data-act="reveal" data-target="${esc(c.id || '')}-${esc(label)}" data-val="${esc(value)}">Reveal</button>`
-          : ''}
+          : ''}</span>
         <button data-act="copy" data-val="${esc(value)}">Copy</button>
       </div>`);
   };
@@ -1293,6 +1384,7 @@ function credCardHTML(c, isSecret) {
       <h3>
         ${ico ? `<img src="${esc(ico)}" alt="" onerror="this.style.display='none'">` : (badge ? `<span>${badge}</span>` : '')}
         <span style="flex:1">${esc(c.name || '(unnamed)')}</span>
+        ${c.category ? `<span class="cat-badge">${esc(CATEGORY_LABELS[c.category] || c.category)}</span>` : ''}
         <button onclick="window.__vaultEditEntry('${esc(c.id || '')}', ${isSecret ? 'true' : 'false'})"
                 style="color:var(--accent)">✎ แก้ไข</button>
         <button onclick="window.__vaultDeleteEntry('${esc(c.id || '')}', ${isSecret ? 'true' : 'false'})"
@@ -1309,8 +1401,45 @@ document.querySelectorAll("#vault-type-filter .vtype-chip").forEach(b => b.addEv
   renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
 }));
 
+let vaultCategoryFilter = "all";
+document.querySelectorAll("#vault-cat-filter .vtype-chip").forEach(b => b.addEventListener("click", () => {
+  vaultCategoryFilter = b.dataset.vcat;
+  document.querySelectorAll("#vault-cat-filter .vtype-chip").forEach(x => x.classList.toggle("active", x === b));
+  renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
+}));
+
+let vaultSearchScope = "all";
+document.getElementById("vq-scope").addEventListener("change", (e) => {
+  vaultSearchScope = e.target.value;
+  renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
+});
+
+// ----- Sidebar: filter by exact entry name (mirrors the extension's sidebar) ---
+let vaultNameFilter = "all";
+function buildVaultSidebar() {
+  const list = document.getElementById("vault-sidebar-list");
+  if (!list || !vaultDecrypted) return;
+  const counts = new Map();
+  vaultDecrypted.main.forEach(c => {
+    const n = c.name || "(unnamed)";
+    counts.set(n, (counts.get(n) || 0) + 1);
+  });
+  const names = [...counts.keys()].sort((a, b) => a.localeCompare(b));
+  let html = `<div class="vault-sidebar-item${vaultNameFilter === "all" ? " active" : ""}" data-vname="all"><span class="n">All</span><span class="c">${vaultDecrypted.main.length}</span></div>`;
+  names.forEach(n => {
+    const cnt = counts.get(n);
+    html += `<div class="vault-sidebar-item${vaultNameFilter === n ? " active" : ""}" data-vname="${esc(n)}"><span class="n">${esc(n)}</span>${cnt > 1 ? `<span class="c">${cnt}</span>` : ""}</div>`;
+  });
+  list.innerHTML = html;
+  list.querySelectorAll(".vault-sidebar-item").forEach(el => el.addEventListener("click", () => {
+    vaultNameFilter = el.dataset.vname;
+    renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
+  }));
+}
+
 function renderVaultEntries(query) {
   if (!vaultDecrypted) return;
+  buildVaultSidebar();
   const q = (query || "").toLowerCase();
 
   // Easter-egg: typing the secret code in the search reveals the hidden grove.
@@ -1318,12 +1447,23 @@ function renderVaultEntries(query) {
   const showSecret = revealHidden || (vaultDecrypted.secret && vaultDecrypted.secret.length > 0 && q !== "");
 
   const matches = (c) => {
+    if (vaultNameFilter !== "all" && (c.name || "(unnamed)") !== vaultNameFilter) return false;
     if (vaultTypeFilter !== "all" && (c.type || "login") !== vaultTypeFilter) return false;
+    if (vaultCategoryFilter !== "all") {
+      const cat = c.category || "";
+      if (vaultCategoryFilter === "uncategorized" ? cat !== "" : cat !== vaultCategoryFilter) return false;
+    }
     if (!q) return true;
-    const hay = [c.name, c.email, c.username, c.phone, c.note,
+    let hay;
+    if (vaultSearchScope === "name") hay = c.name || "";
+    else if (vaultSearchScope === "email") hay = c.email || "";
+    else if (vaultSearchScope === "username") hay = c.username || "";
+    else if (vaultSearchScope === "phone") hay = c.phone || "";
+    else if (vaultSearchScope === "note") hay = c.note || "";
+    else hay = [c.name, c.email, c.username, c.phone, c.note,
       ...(c.extra || []).filter(f => !f.s).flatMap(f => [f.l, f.v]),
-    ].filter(Boolean).join(" ").toLowerCase();
-    return hay.includes(q);
+    ].filter(Boolean).join(" ");
+    return hay.toLowerCase().includes(q);
   };
 
   const main = vaultDecrypted.main.filter(matches);
