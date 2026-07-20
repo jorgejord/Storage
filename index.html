@@ -356,12 +356,6 @@
         <button id="vault-relock"
                 style="background:var(--bg-2);color:var(--fg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit">🔒 Re-lock</button>
       </div>
-      <div class="vault-type-filter" id="vault-type-filter">
-        <button type="button" class="vtype-chip active" data-vtype="all">All</button>
-        <button type="button" class="vtype-chip" data-vtype="login">🔑 Login</button>
-        <button type="button" class="vtype-chip" data-vtype="phone">📱 Phone</button>
-        <button type="button" class="vtype-chip" data-vtype="note">📝 Note</button>
-      </div>
       <div class="vault-hint">Tip: click anywhere on a card to edit it.</div>
 
       <!-- Add/Edit credential form (hidden until + เพิ่มรหัส or a card is clicked) -->
@@ -463,16 +457,15 @@
     .vault-type-tabs { display: flex; gap: 4px; margin-bottom: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px; }
     .vault-type-tab { flex: 1; padding: 6px 4px; background: transparent; border: 0; border-radius: 5px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); }
     .vault-type-tab.active { background: var(--accent); color: #fff; }
-    .vault-type-filter { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
-    .vtype-chip { padding: 5px 12px; border-radius: 14px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
-    .vtype-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     .vault-hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
     .vault-sidebar { flex: 0 0 200px; max-height: 78vh; overflow-y: auto; background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; position: sticky; top: 12px; }
     .vault-sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: .6px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
-    .vault-sidebar-item { display: flex; justify-content: space-between; gap: 6px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--muted); margin-bottom: 1px; }
+    .vault-sidebar-item { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--muted); margin-bottom: 1px; }
     .vault-sidebar-item:hover { background: var(--bg); color: var(--fg); }
     .vault-sidebar-item.active { background: var(--accent); color: #fff; font-weight: 600; }
-    .vault-sidebar-item .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vault-sidebar-item img { width: 15px; height: 15px; border-radius: 3px; object-fit: contain; flex-shrink: 0; background: rgba(255,255,255,.06); }
+    .vault-sidebar-item .no-icon { width: 15px; text-align: center; flex-shrink: 0; font-size: 11px; opacity: .6; }
+    .vault-sidebar-item .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .vault-sidebar-item .c { flex-shrink: 0; opacity: .75; font-size: 11px; }
     @media (max-width: 720px) { .vault-sidebar { display: none; } }
     .vc-ef-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
@@ -1403,13 +1396,6 @@ function credCardHTML(c, isSecret) {
     </div>`;
 }
 
-let vaultTypeFilter = "all";
-document.querySelectorAll("#vault-type-filter .vtype-chip").forEach(b => b.addEventListener("click", () => {
-  vaultTypeFilter = b.dataset.vtype;
-  document.querySelectorAll("#vault-type-filter .vtype-chip").forEach(x => x.classList.toggle("active", x === b));
-  renderVaultEntries(document.getElementById("vq").value.trim().toLowerCase());
-}));
-
 let vaultSearchScope = "all";
 document.getElementById("vq-scope").addEventListener("change", (e) => {
   vaultSearchScope = e.target.value;
@@ -1422,15 +1408,24 @@ function buildVaultSidebar() {
   const list = document.getElementById("vault-sidebar-list");
   if (!list || !vaultDecrypted) return;
   const counts = new Map();
+  const icons = new Map();
   vaultDecrypted.main.forEach(c => {
     const n = c.name || "(unnamed)";
     counts.set(n, (counts.get(n) || 0) + 1);
+    if (!icons.get(n)) {
+      const ic = c.icon || favicon(c.url);
+      if (ic) icons.set(n, ic);
+    }
   });
   const names = [...counts.keys()].sort((a, b) => a.localeCompare(b));
-  let html = `<div class="vault-sidebar-item${vaultNameFilter === "all" ? " active" : ""}" data-vname="all"><span class="n">All</span><span class="c">${vaultDecrypted.main.length}</span></div>`;
+  let html = `<div class="vault-sidebar-item${vaultNameFilter === "all" ? " active" : ""}" data-vname="all"><span class="no-icon">◆</span><span class="n">All</span><span class="c">${vaultDecrypted.main.length}</span></div>`;
   names.forEach(n => {
     const cnt = counts.get(n);
-    html += `<div class="vault-sidebar-item${vaultNameFilter === n ? " active" : ""}" data-vname="${esc(n)}"><span class="n">${esc(n)}</span>${cnt > 1 ? `<span class="c">${cnt}</span>` : ""}</div>`;
+    const ic = icons.get(n);
+    const iconHtml = ic
+      ? `<img src="${esc(ic)}" alt="" onerror="this.outerHTML='<span class=&quot;no-icon&quot;>🌐</span>'">`
+      : `<span class="no-icon">🌐</span>`;
+    html += `<div class="vault-sidebar-item${vaultNameFilter === n ? " active" : ""}" data-vname="${esc(n)}">${iconHtml}<span class="n">${esc(n)}</span>${cnt > 1 ? `<span class="c">${cnt}</span>` : ""}</div>`;
   });
   list.innerHTML = html;
   list.querySelectorAll(".vault-sidebar-item").forEach(el => el.addEventListener("click", () => {
@@ -1450,7 +1445,6 @@ function renderVaultEntries(query) {
 
   const matches = (c) => {
     if (vaultNameFilter !== "all" && (c.name || "(unnamed)") !== vaultNameFilter) return false;
-    if (vaultTypeFilter !== "all" && (c.type || "login") !== vaultTypeFilter) return false;
     if (!q) return true;
     let hay;
     if (vaultSearchScope === "name") hay = c.name || "";
